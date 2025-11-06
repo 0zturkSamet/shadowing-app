@@ -4,9 +4,13 @@ import Header from '@/components/Header';
 import VideoSearch from '@/components/VideoSearch';
 import VideoCard from '@/components/VideoCard';
 import StatCard from '@/components/StatCard';
-import { Target, Trophy, Flame } from 'lucide-react';
-import { useState } from 'react';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import { Target, Trophy, Flame, LogIn, LogOut, User } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { Video } from '@/types';
+import { useAuth } from '@/hooks/useAuth';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 // Mock data for demonstration
 const mockStats = {
@@ -85,9 +89,18 @@ const mockTrendingVideos: Video[] = [
 ];
 
 export default function Home() {
+  const { user, logout, loading } = useAuth();
+  const router = useRouter();
   const [searchResults, setSearchResults] = useState<Video[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/auth/login');
+    }
+  }, [user, loading, router]);
 
   const handleSearch = async (query: string, language: string) => {
     setIsSearching(true);
@@ -110,8 +123,54 @@ export default function Home() {
 
   const displayVideos = hasSearched ? searchResults : mockTrendingVideos;
 
+  const handleLogout = async () => {
+    await logout();
+  };
+
+  // Show loading while checking auth
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 via-indigo-50/30 to-purple-50/30">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-indigo-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 text-lg">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render if not authenticated
+  if (!user) {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-indigo-50/30 to-purple-50/30">
+      {/* Auth Bar */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center justify-center w-10 h-10 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full text-white font-semibold">
+              {user.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-900 flex items-center space-x-2">
+                <User size={16} />
+                <span>{user.name}</span>
+              </p>
+              <p className="text-xs text-gray-500">Learning {user.learning_language}</p>
+            </div>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors duration-200 font-medium"
+          >
+            <LogOut size={18} />
+            <span>Logout</span>
+          </button>
+        </div>
+      </div>
+
       <Header />
 
       <main className="container mx-auto px-4 py-8">

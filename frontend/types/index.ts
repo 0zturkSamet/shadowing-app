@@ -64,3 +64,33 @@ export interface SearchParams {
   limit?: number;
   offset?: number;
 }
+
+// Auth Types
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  learning_language: string;
+}
+
+export interface AuthResponse {
+  access_token: string;
+  token_type: string;
+}
+
+export interface AuthError {
+  error: string;
+  message: string;
+}
+
+export interface LoginData {
+  email: string;
+  password: string;
+}
+
+export interface RegisterData {
+  email: string;
+  password: string;
+  name: string;
+  learning_language: string;
+}

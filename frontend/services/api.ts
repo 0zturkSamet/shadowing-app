@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import { Video, UserProgress, Phrase, SearchParams } from '@/types';
+import { Video, UserProgress, Phrase, SearchParams, AuthUser, AuthResponse, LoginData, RegisterData } from '@/types';
 
 // Create axios instance with default config
 const api: AxiosInstance = axios.create({
@@ -136,6 +136,85 @@ export const getVideoById = async (videoId: string): Promise<Video> => {
     return response.data;
   } catch (error) {
     console.error('Error fetching video:', error);
+    throw error;
+  }
+};
+
+// Auth API functions
+
+/**
+ * Register a new user
+ */
+export const register = async (data: RegisterData): Promise<AuthResponse> => {
+  try {
+    const response = await api.post('/auth/register', data);
+    const authResponse: AuthResponse = response.data;
+    // Store token in localStorage
+    if (authResponse.access_token) {
+      localStorage.setItem('auth_token', authResponse.access_token);
+    }
+    return authResponse;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response) {
+      throw error.response.data;
+    }
+    throw { error: 'Network error', message: 'Failed to connect to server' };
+  }
+};
+
+/**
+ * Login user
+ */
+export const login = async (data: LoginData): Promise<AuthResponse> => {
+  try {
+    // Convert to form data for OAuth2 password flow
+    const formData = new FormData();
+    formData.append('username', data.email);
+    formData.append('password', data.password);
+
+    const response = await api.post('/auth/login', formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
+
+    const authResponse: AuthResponse = response.data;
+    // Store token in localStorage
+    if (authResponse.access_token) {
+      localStorage.setItem('auth_token', authResponse.access_token);
+    }
+    return authResponse;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response) {
+      throw error.response.data;
+    }
+    throw { error: 'Network error', message: 'Failed to connect to server' };
+  }
+};
+
+/**
+ * Logout user
+ */
+export const logout = async (): Promise<void> => {
+  try {
+    await api.post('/auth/logout');
+  } catch (error) {
+    console.error('Error during logout:', error);
+  } finally {
+    // Always clear token from localStorage
+    localStorage.removeItem('auth_token');
+  }
+};
+
+/**
+ * Get current authenticated user
+ */
+export const getCurrentUser = async (): Promise<AuthUser> => {
+  try {
+    const response = await api.get('/auth/me');
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching current user:', error);
     throw error;
   }
 };
