@@ -1,98 +1,117 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Header from '@/components/Header';
-import PhraseSelector from '@/components/PhraseSelector';
-import { ArrowLeft, Mic, Play, Pause, RotateCcw } from 'lucide-react';
-import { Phrase } from '@/types';
-
-// Mock data
-const mockPhrases: Phrase[] = [
-  {
-    id: '1',
-    text: 'Good morning! How can I help you today?',
-    start_time: 5,
-    end_time: 8,
-    difficulty: 'beginner',
-    video_id: '1',
-  },
-  {
-    id: '2',
-    text: "I'd like to order a large cappuccino, please.",
-    start_time: 10,
-    end_time: 13,
-    difficulty: 'beginner',
-    video_id: '1',
-  },
-  {
-    id: '3',
-    text: 'Would you like that with regular or oat milk?',
-    start_time: 15,
-    end_time: 18,
-    difficulty: 'intermediate',
-    video_id: '1',
-  },
-  {
-    id: '4',
-    text: 'Regular milk is fine, and could I also get a croissant?',
-    start_time: 20,
-    end_time: 24,
-    difficulty: 'intermediate',
-    video_id: '1',
-  },
-  {
-    id: '5',
-    text: "Certainly! That'll be $8.50. Will that be cash or card?",
-    start_time: 26,
-    end_time: 30,
-    difficulty: 'advanced',
-    video_id: '1',
-  },
-];
+import { ArrowLeft, Loader2, AlertCircle, Clock } from 'lucide-react';
+import { VideoResponse, PhraseSchema } from '@/types/video';
+import { getVideoDetails, getTranscript } from '@/services/videoApi';
 
 export default function PracticePage() {
   const params = useParams();
   const router = useRouter();
   const videoId = params.id as string;
 
-  const [selectedPhrase, setSelectedPhrase] = useState<Phrase | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [score, setScore] = useState<number | null>(null);
+  const [video, setVideo] = useState<VideoResponse | null>(null);
+  const [phrases, setPhrases] = useState<PhraseSchema[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedPhraseIndex, setSelectedPhraseIndex] = useState<number | null>(null);
 
-  const handleSelectPhrase = (phrase: Phrase) => {
-    setSelectedPhrase(phrase);
-    setScore(null);
-    setIsRecording(false);
-  };
+  // Fetch video details and transcript
+  useEffect(() => {
+    const fetchVideoData = async () => {
+      setIsLoading(true);
+      setError(null);
 
-  const handleRecord = () => {
-    setIsRecording(!isRecording);
-    // TODO: Implement recording logic
-    if (!isRecording) {
-      // Simulate scoring after recording
-      setTimeout(() => {
-        setScore(Math.floor(Math.random() * 30) + 70); // Random score 70-100
-        setIsRecording(false);
-      }, 3000);
+      try {
+        const [videoDetails, transcriptData] = await Promise.all([
+          getVideoDetails(videoId),
+          getTranscript(videoId),
+        ]);
+
+        setVideo(videoDetails);
+        setPhrases(transcriptData.phrases);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load video';
+        setError(errorMessage);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (videoId) {
+      fetchVideoData();
     }
+  }, [videoId]);
+
+  /**
+   * Format timestamp to MM:SS
+   */
+  const formatTimestamp = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handlePlayPhrase = () => {
-    setIsPlaying(!isPlaying);
-    // TODO: Implement audio playback
-    if (!isPlaying) {
-      setTimeout(() => {
-        setIsPlaying(false);
-      }, 3000);
-    }
+  /**
+   * Handle phrase click to seek video
+   */
+  const handlePhraseClick = (index: number) => {
+    setSelectedPhraseIndex(index);
+    // Note: In a full implementation, you would use YouTube Player API
+    // to seek to the specific timestamp
   };
 
-  const handleRetry = () => {
-    setScore(null);
-    setIsRecording(false);
-  };
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-indigo-50/30 to-purple-50/30">
+        <Header />
+        <main className="container mx-auto px-4 py-8">
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center">
+              <Loader2 className="w-16 h-16 text-indigo-600 animate-spin mx-auto mb-4" />
+              <p className="text-xl text-gray-600">Loading video...</p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error || !video) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-indigo-50/30 to-purple-50/30">
+        <Header />
+        <main className="container mx-auto px-4 py-8">
+          <button
+            onClick={() => router.push('/')}
+            className="flex items-center text-gray-600 hover:text-indigo-600 transition-colors mb-6"
+          >
+            <ArrowLeft className="w-5 h-5 mr-2" />
+            Back to Home
+          </button>
+          <div className="bg-red-50 border border-red-200 rounded-xl p-8 max-w-2xl mx-auto">
+            <div className="flex items-start space-x-4">
+              <AlertCircle className="w-8 h-8 text-red-600 flex-shrink-0 mt-1" />
+              <div>
+                <h2 className="text-2xl font-bold text-red-900 mb-2">Failed to Load Video</h2>
+                <p className="text-red-700 mb-4">{error || 'Video not found'}</p>
+                <button
+                  onClick={() => router.push('/')}
+                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  Return to Home
+                </button>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-indigo-50/30 to-purple-50/30">
@@ -102,9 +121,9 @@ export default function PracticePage() {
         {/* Back Button */}
         <button
           onClick={() => router.push('/')}
-          className="flex items-center text-gray-600 hover:text-indigo-600 transition-colors mb-6"
+          className="flex items-center text-gray-600 hover:text-indigo-600 transition-colors mb-6 group"
         >
-          <ArrowLeft className="w-5 h-5 mr-2" />
+          <ArrowLeft className="w-5 h-5 mr-2 group-hover:-translate-x-1 transition-transform" />
           Back to Home
         </button>
 
@@ -112,111 +131,64 @@ export default function PracticePage() {
           {/* Video Player Section */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-              {/* Video Placeholder */}
-              <div className="bg-gradient-to-br from-indigo-400 to-purple-500 aspect-video flex items-center justify-center">
-                <Play className="w-24 h-24 text-white/80" />
+              {/* Video Info Header */}
+              <div className="p-6 border-b border-gray-200">
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">{video.title}</h1>
+                <p className="text-gray-600">{video.channel_name}</p>
               </div>
 
-              {/* Video Controls */}
-              <div className="p-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                  Daily English Conversation - Coffee Shop
-                </h2>
-
-                {selectedPhrase && (
-                  <div className="space-y-4">
-                    {/* Selected Phrase Display */}
-                    <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
-                      <p className="text-sm text-indigo-600 font-medium mb-2">Selected Phrase:</p>
-                      <p className="text-lg text-gray-900">{selectedPhrase.text}</p>
-                    </div>
-
-                    {/* Playback Button */}
-                    <button
-                      onClick={handlePlayPhrase}
-                      className={`w-full py-3 rounded-lg font-medium transition-all ${
-                        isPlaying
-                          ? 'bg-gray-600 hover:bg-gray-700'
-                          : 'bg-indigo-600 hover:bg-indigo-700'
-                      } text-white flex items-center justify-center space-x-2`}
-                    >
-                      {isPlaying ? (
-                        <>
-                          <Pause className="w-5 h-5" />
-                          <span>Pause</span>
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-5 h-5" />
-                          <span>Play Phrase</span>
-                        </>
-                      )}
-                    </button>
-
-                    {/* Recording Button */}
-                    <button
-                      onClick={handleRecord}
-                      disabled={isPlaying}
-                      className={`w-full py-4 rounded-lg font-medium transition-all flex items-center justify-center space-x-3 ${
-                        isRecording
-                          ? 'bg-red-600 hover:bg-red-700 animate-pulse'
-                          : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'
-                      } text-white disabled:opacity-50 disabled:cursor-not-allowed`}
-                    >
-                      <Mic className="w-6 h-6" />
-                      <span className="text-lg">
-                        {isRecording ? 'Recording...' : 'Start Recording'}
-                      </span>
-                    </button>
-
-                    {/* Score Display */}
-                    {score !== null && (
-                      <div className="bg-white border-2 border-emerald-200 rounded-lg p-6 text-center">
-                        <p className="text-gray-600 mb-2">Your Score</p>
-                        <p className="text-5xl font-bold text-emerald-600 mb-4">{score}%</p>
-                        <div className="flex gap-3">
-                          <button
-                            onClick={handleRetry}
-                            className="flex-1 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2"
-                          >
-                            <RotateCcw className="w-4 h-4" />
-                            <span>Try Again</span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              const currentIndex = mockPhrases.findIndex(p => p.id === selectedPhrase.id);
-                              if (currentIndex < mockPhrases.length - 1) {
-                                setSelectedPhrase(mockPhrases[currentIndex + 1]);
-                                setScore(null);
-                              }
-                            }}
-                            className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors"
-                          >
-                            Next Phrase
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {!selectedPhrase && (
-                  <div className="text-center py-8 text-gray-500">
-                    Select a phrase from the list to start practicing
-                  </div>
-                )}
+              {/* YouTube Embedded Player */}
+              <div className="relative w-full" style={{ paddingTop: '56.25%' }}>
+                <iframe
+                  className="absolute top-0 left-0 w-full h-full"
+                  src={`https://www.youtube.com/embed/${video.youtube_id}`}
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  title={video.title}
+                />
               </div>
             </div>
           </div>
 
-          {/* Phrase Selector Section */}
+          {/* Transcript Section */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-lg p-6 sticky top-8">
-              <PhraseSelector
-                phrases={mockPhrases}
-                selectedPhraseId={selectedPhrase?.id}
-                onSelectPhrase={handleSelectPhrase}
-              />
+            <div className="bg-white rounded-xl shadow-lg p-6 sticky top-8 max-h-[calc(100vh-6rem)] overflow-y-auto">
+              <h3 className="text-xl font-bold text-gray-900 mb-4">Transcript</h3>
+
+              {phrases.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">No transcript available for this video.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {phrases.map((phrase, index) => (
+                    <div
+                      key={index}
+                      onClick={() => handlePhraseClick(index)}
+                      className={`p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
+                        selectedPhraseIndex === index
+                          ? 'bg-indigo-50 border-indigo-300 shadow-sm'
+                          : 'bg-gray-50 border-gray-200 hover:border-indigo-200'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center space-x-2 text-sm text-gray-600">
+                          <Clock className="w-4 h-4" />
+                          <span className="font-medium">
+                            {formatTimestamp(phrase.start_time)}
+                          </span>
+                        </div>
+                      </div>
+                      <p className={`text-sm leading-relaxed ${
+                        selectedPhraseIndex === index ? 'text-gray-900 font-medium' : 'text-gray-700'
+                      }`}>
+                        {phrase.text}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
