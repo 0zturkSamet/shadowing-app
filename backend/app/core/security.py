@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 
 from passlib.context import CryptContext
-from jose import jwt
+from jose import jwt, JWTError
 
 from app.config import settings
 
@@ -85,3 +85,31 @@ def create_access_token(
     )
 
     return encoded_jwt
+
+
+def decode_access_token(token: str) -> Dict[str, Any]:
+    """
+    Decode and verify a JWT access token.
+
+    Args:
+        token: JWT token string to decode
+
+    Returns:
+        Dict[str, Any]: Decoded token payload
+
+    Raises:
+        JWTError: If token is invalid or expired
+
+    Example:
+        payload = decode_access_token(token)
+        user_email = payload.get("sub")
+    """
+    try:
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET,
+            algorithms=[settings.JWT_ALGORITHM]
+        )
+        return payload
+    except JWTError as e:
+        raise JWTError(f"Could not validate credentials: {str(e)}")
