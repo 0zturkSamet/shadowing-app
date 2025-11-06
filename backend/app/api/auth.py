@@ -5,9 +5,11 @@ This module handles user registration, login, and profile retrieval.
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import Dict
+from sqlalchemy.exc import IntegrityError
 
-from app.core.database import get_db
+from app.core.dependencies import get_db, get_current_user
+from app.core.security import hash_password, verify_password, create_access_token
+from app.models import User
 from app.schemas import UserRegister, UserLogin, UserResponse, Token
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
@@ -40,15 +42,37 @@ async def register(
             "learning_language": "Spanish"
         }
     """
-    # TODO: Implement user registration logic
-    # - Check if email already exists
-    # - Hash password using security.hash_password()
-    # - Create user in database
-    # - Return user data
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Registration endpoint not yet implemented"
+    # Check if user with this email already exists
+    existing_user = db.query(User).filter(User.email == user_data.email).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+
+    # Hash the password
+    hashed_password = hash_password(user_data.password)
+
+    # Create new user
+    new_user = User(
+        email=user_data.email,
+        password_hash=hashed_password,
+        name=user_data.name,
+        learning_language=user_data.learning_language
     )
+
+    try:
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+
+    return new_user
 
 
 @router.post("/login", response_model=Token)
@@ -76,26 +100,39 @@ async def login(
             "password": "securepassword123"
         }
     """
-    # TODO: Implement login logic
-    # - Find user by email
-    # - Verify password using security.verify_password()
-    # - Create JWT token using security.create_access_token()
-    # - Return token
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Login endpoint not yet implemented"
-    )
+    # Find user by email
+    user = db.query(User).filter(User.email == credentials.email).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Verify password
+    if not verify_password(credentials.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Create JWT token
+    access_token = create_access_token(data={"sub": user.email})
+
+    return Token(access_token=access_token, token_type="bearer")
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_current_user(
-    db: Session = Depends(get_db)
+async def get_me(
+    current_user: User = Depends(get_current_user)
 ) -> UserResponse:
     """
     Get current authenticated user's profile.
 
     Args:
-        db: Database session
+        current_user: Current authenticated user from JWT token
 
     Returns:
         UserResponse: Current user data
@@ -107,11 +144,4 @@ async def get_current_user(
         GET /api/auth/me
         Headers: Authorization: Bearer <token>
     """
-    # TODO: Implement current user retrieval
-    # - Decode JWT token from Authorization header
-    # - Get user from database
-    # - Return user data
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Get current user endpoint not yet implemented"
-    )
+    return current_user
