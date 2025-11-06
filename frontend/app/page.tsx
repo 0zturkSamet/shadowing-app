@@ -1,16 +1,15 @@
 'use client';
 
 import Header from '@/components/Header';
-import VideoSearch from '@/components/VideoSearch';
-import VideoCard from '@/components/VideoCard';
+import VideoSearchBar from '@/components/VideoSearchBar';
+import VideoGrid from '@/components/VideoGrid';
 import StatCard from '@/components/StatCard';
-import ProtectedRoute from '@/components/ProtectedRoute';
-import { Target, Trophy, Flame, LogIn, LogOut, User } from 'lucide-react';
+import { Target, Trophy, Flame, LogOut, User } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { Video } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { VideoResponse } from '@/types/video';
+import { searchVideos as searchVideosApi } from '@/services/videoApi';
 
 // Mock data for demonstration
 const mockStats = {
@@ -19,80 +18,13 @@ const mockStats = {
   currentStreak: 7,
 };
 
-const mockTrendingVideos: Video[] = [
-  {
-    id: '1',
-    title: 'Daily English Conversation - Coffee Shop',
-    description: 'Learn practical English phrases for ordering coffee and casual conversation',
-    thumbnail_url: '',
-    language: 'English',
-    difficulty: 'beginner',
-    duration: 180,
-    view_count: 1250,
-    created_at: '2024-01-15',
-  },
-  {
-    id: '2',
-    title: 'Spanish Travel Phrases - Airport & Hotel',
-    description: 'Essential Spanish vocabulary for travelers',
-    thumbnail_url: '',
-    language: 'Spanish',
-    difficulty: 'intermediate',
-    duration: 240,
-    view_count: 890,
-    created_at: '2024-01-14',
-  },
-  {
-    id: '3',
-    title: 'French Business Meeting Vocabulary',
-    description: 'Professional French for business contexts',
-    thumbnail_url: '',
-    language: 'French',
-    difficulty: 'advanced',
-    duration: 300,
-    view_count: 654,
-    created_at: '2024-01-13',
-  },
-  {
-    id: '4',
-    title: 'German Pronunciation Guide',
-    description: 'Master the challenging sounds of German',
-    thumbnail_url: '',
-    language: 'German',
-    difficulty: 'beginner',
-    duration: 210,
-    view_count: 543,
-    created_at: '2024-01-12',
-  },
-  {
-    id: '5',
-    title: 'Japanese Daily Greetings',
-    description: 'Common Japanese greetings and polite expressions',
-    thumbnail_url: '',
-    language: 'Japanese',
-    difficulty: 'beginner',
-    duration: 150,
-    view_count: 987,
-    created_at: '2024-01-11',
-  },
-  {
-    id: '6',
-    title: 'Italian Restaurant Conversations',
-    description: 'Order food and interact at Italian restaurants',
-    thumbnail_url: '',
-    language: 'Italian',
-    difficulty: 'intermediate',
-    duration: 195,
-    view_count: 432,
-    created_at: '2024-01-10',
-  },
-];
-
 export default function Home() {
   const { user, logout, loading } = useAuth();
   const router = useRouter();
-  const [searchResults, setSearchResults] = useState<Video[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
+  const [videos, setVideos] = useState<VideoResponse[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [hasSearched, setHasSearched] = useState(false);
 
   // Redirect to login if not authenticated
@@ -103,25 +35,26 @@ export default function Home() {
   }, [user, loading, router]);
 
   const handleSearch = async (query: string, language: string) => {
-    setIsSearching(true);
+    setIsLoading(true);
+    setError(null);
     setHasSearched(true);
+    setSearchQuery(query);
 
-    // Simulate API call
-    setTimeout(() => {
-      // Filter mock data based on search
-      const filtered = mockTrendingVideos.filter((video) => {
-        const matchesQuery = !query ||
-          video.title.toLowerCase().includes(query.toLowerCase()) ||
-          video.description.toLowerCase().includes(query.toLowerCase());
-        const matchesLanguage = !language || video.language.toLowerCase() === language.toLowerCase();
-        return matchesQuery && matchesLanguage;
-      });
-      setSearchResults(filtered);
-      setIsSearching(false);
-    }, 800);
+    try {
+      const response = await searchVideosApi(query, language);
+      setVideos(response.videos);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to search videos';
+      setError(errorMessage);
+      setVideos([]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const displayVideos = hasSearched ? searchResults : mockTrendingVideos;
+  const handleVideoClick = (videoId: string) => {
+    // Video click is handled by VideoGrid component
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -213,34 +146,38 @@ export default function Home() {
           <h3 className="text-2xl font-bold mb-6 text-gray-900">
             Find Your Perfect Practice Video
           </h3>
-          <VideoSearch
+          <VideoSearchBar
             onSearch={handleSearch}
-            isLoading={isSearching}
-            resultCount={displayVideos.length}
+            isLoading={isLoading}
+            resultCount={videos.length}
+            error={error}
           />
         </section>
 
         {/* Videos Section */}
         <section>
           <h3 className="text-2xl font-bold mb-6 text-gray-900">
-            {hasSearched ? 'Search Results' : 'Trending Videos'}
+            {hasSearched ? `Search Results${searchQuery ? ` for "${searchQuery}"` : ''}` : 'YouTube Videos'}
           </h3>
 
-          {isSearching ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-              <p className="mt-4 text-gray-600">Loading videos...</p>
-            </div>
-          ) : displayVideos.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-xl shadow">
-              <p className="text-gray-600 text-lg">No videos found. Try a different search.</p>
+          {!hasSearched ? (
+            <div className="text-center py-16 bg-white rounded-xl shadow">
+              <div className="max-w-md mx-auto">
+                <div className="w-24 h-24 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Target className="w-12 h-12 text-indigo-600" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Search for Videos</h3>
+                <p className="text-gray-600">
+                  Use the search bar above to find YouTube videos to practice with.
+                </p>
+              </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {displayVideos.map((video) => (
-                <VideoCard key={video.id} video={video} />
-              ))}
-            </div>
+            <VideoGrid
+              videos={videos}
+              isLoading={isLoading}
+              onVideoClick={handleVideoClick}
+            />
           )}
         </section>
       </main>
