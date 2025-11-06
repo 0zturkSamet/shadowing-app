@@ -42,5 +42,11 @@ class Settings:
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = os.getenv("DEBUG", "False").lower() == "true"
 
+    # YouTube API settings
+    YOUTUBE_API_KEY: str = os.getenv(
+        "YOUTUBE_API_KEY",
+        ""
+    )
+
 
 settings = Settings()
