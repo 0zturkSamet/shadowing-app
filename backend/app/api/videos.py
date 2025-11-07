@@ -223,17 +223,22 @@ async def get_video(
 
 
 @router.get("/{video_id}/transcript", response_model=TranscriptResponse)
-async def get_transcript(
+async def get_transcript_or_captions(
     video_id: str,
     languages: Optional[str] = Query(None, description="Comma-separated language codes (e.g., 'es,en')"),
     db: Session = Depends(get_db),
     youtube_service: YouTubeService = Depends(get_youtube_service)
 ) -> TranscriptResponse:
     """
-    Get transcript for a YouTube video.
+    Get transcript or captions for video - INTELLIGENT FALLBACK.
 
-    Retrieves transcript from database if cached, otherwise fetches from YouTube
-    and caches it. Also ensures the video metadata is cached.
+    Returns in priority order:
+    1. Transcript (if available)
+    2. Captions (if available)
+    3. Auto captions (if available)
+    4. Error with helpful message
+
+    This endpoint is THE CORE of user retention!
 
     Args:
         video_id: YouTube video ID (e.g., 'dQw4w9WgXcQ')
@@ -242,18 +247,17 @@ async def get_transcript(
         youtube_service: YouTube service instance
 
     Returns:
-        TranscriptResponse: Transcript with timestamped phrases
+        TranscriptResponse: Transcript/captions with timestamped phrases
 
     Raises:
-        HTTPException: If video not found (404), transcript unavailable (400),
-                      or fetch fails (500)
+        HTTPException: If no content available (400) or fetch fails (500)
 
     Example:
         GET /api/videos/dQw4w9WgXcQ/transcript
         GET /api/videos/dQw4w9WgXcQ/transcript?languages=es,en
     """
     try:
-        logger.info(f"Fetching transcript for video: {video_id}")
+        logger.info(f"Fetching content for video (with fallback): {video_id}")
 
         # Get or create video record
         video = db.query(Video).filter(Video.youtube_id == video_id).first()
@@ -283,55 +287,60 @@ async def get_transcript(
         ).first()
 
         if existing_transcript:
-            logger.info(f"Transcript found in database for video: {video_id}")
+            logger.info(f"Content found in database for video: {video_id}")
             return TranscriptResponse(
                 video_id=video.id,
                 phrases=[PhraseSchema(**phrase) for phrase in existing_transcript.phrases]
             )
 
-        # Fetch transcript from YouTube
-        logger.info(f"Fetching transcript from YouTube: {video_id}")
-        language_list = languages.split(',') if languages else None
-        transcript_data = youtube_service.get_transcript(video_id, language_list)
+        # Use the NEW intelligent fallback system!
+        # This is the KEY line that uses our new fallback system!
+        logger.info(f"Using intelligent fallback system for {video_id}")
+        result = youtube_service.get_content_for_practice(video_id)
 
-        # Cache transcript in database
+        # Handle the result
+        if result is None:
+            # No content available anywhere - return helpful error
+            logger.warning(f"No content available for video: {video_id}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No transcript or captions available for this video. Try another video - we recommend videos with captions."
+            )
+
+        # Extract the content (phrases) from the result
+        # result has structure: {content: {phrases: [...], ...}, source: ..., quality: ..., warning: ...}
+        content_data = result.get("content", {})
+        phrases = content_data.get("phrases", [])
+        source = result.get("source", "unknown")
+        quality = result.get("quality", "unknown")
+        warning = result.get("warning")
+
+        # Cache the result in database
         new_transcript = Transcript(
             video_id=video.id,
-            phrases=transcript_data['phrases']
+            phrases=phrases
         )
         db.add(new_transcript)
         db.commit()
         db.refresh(new_transcript)
 
-        logger.info(f"Successfully cached transcript for video: {video_id}")
+        # Log success with source information
+        logger.info(f"✅ Content fetched for {video_id}: source={source}, quality={quality}, phrases={len(phrases)}")
+        if warning:
+            logger.info(f"⚠️  Warning: {warning}")
 
         return TranscriptResponse(
             video_id=video.id,
-            phrases=[PhraseSchema(**phrase) for phrase in new_transcript.phrases]
+            phrases=[PhraseSchema(**phrase) for phrase in phrases]
         )
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error fetching transcript for {video_id}: {e}", exc_info=True)
-
-        # Check if it's a transcript availability issue
-        error_str = str(e).lower()
-        transcript_keywords = [
-            'disabled', 'not found', 'unavailable',
-            'no transcript', 'no element found', 'caption',
-            'not available'
-        ]
-
-        if any(keyword in error_str for keyword in transcript_keywords):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(e)  # Use the improved error message from youtube_service
-            )
-
+        logger.error(f"Error fetching content for {video_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch transcript: {str(e)}"
+            detail=f"Failed to fetch transcript or captions: {str(e)}"
         )
 
 
@@ -388,17 +397,32 @@ async def get_video_player(
             db.commit()
             db.refresh(video)
 
-        # Get transcript
+        # Get transcript/captions using intelligent fallback
         transcript = db.query(Transcript).filter(Transcript.video_id == video.id).first()
 
         if not transcript:
-            # Fetch transcript from YouTube
-            logger.info(f"Fetching transcript from YouTube: {video_id}")
-            transcript_data = youtube_service.get_transcript(video_id, None)
+            # Use intelligent fallback system
+            logger.info(f"Using intelligent fallback system for player: {video_id}")
+            result = youtube_service.get_content_for_practice(video_id)
+
+            if result is None:
+                logger.warning(f"No content available for video player: {video_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No transcript or captions available for this video. Try another video - we recommend videos with captions."
+                )
+
+            # Extract phrases from result
+            content_data = result.get("content", {})
+            phrases = content_data.get("phrases", [])
+            source = result.get("source", "unknown")
+            quality = result.get("quality", "unknown")
+
+            logger.info(f"✅ Content fetched for player {video_id}: source={source}, quality={quality}")
 
             transcript = Transcript(
                 video_id=video.id,
-                phrases=transcript_data['phrases']
+                phrases=phrases
             )
             db.add(transcript)
             db.commit()
