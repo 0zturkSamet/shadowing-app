@@ -75,14 +75,19 @@ class YouTubeService:
             return cached_results
 
         try:
+            # Search for MORE videos initially to filter for transcript availability
+            # Request 3x the desired amount to account for videos without transcripts
+            search_max = min(max_results * 3, 50)  # YouTube API max is 50
+
             # Search for videos
             search_response = self.youtube.search().list(
                 q=query,
                 part='id,snippet',
                 type='video',
                 relevanceLanguage=language,
-                maxResults=max_results,
-                videoCaption='closedCaption'  # Only videos with captions
+                maxResults=search_max,
+                videoCaption='closedCaption',  # Only videos with captions
+                videoDuration='medium'  # Prefer videos 4-20 minutes (better for learning)
             ).execute()
 
             video_ids = [
@@ -107,6 +112,10 @@ class YouTubeService:
                     duration_str = item['contentDetails']['duration']
                     duration_seconds = int(isodate.parse_duration(duration_str).total_seconds())
 
+                    # Skip very short videos (< 30 seconds) - unlikely to be useful for learning
+                    if duration_seconds < 30:
+                        continue
+
                     video_data = {
                         'video_id': item['id'],
                         'youtube_id': item['id'],
@@ -119,6 +128,11 @@ class YouTubeService:
                         'language': language
                     }
                     results.append(video_data)
+
+                    # Stop once we have enough results
+                    if len(results) >= max_results:
+                        break
+
                 except (KeyError, ValueError) as e:
                     logger.warning(f"Error parsing video {item.get('id')}: {e}")
                     continue
