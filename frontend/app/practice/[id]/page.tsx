@@ -59,6 +59,13 @@ export default function PracticePage() {
           }
         );
 
+        // Handle 401 Unauthorized - redirect to login
+        if (response.status === 401) {
+          localStorage.removeItem('auth_token');
+          router.push('/auth/login');
+          return;
+        }
+
         const data: TranscriptResponse = await response.json();
 
         if (data.status === "success" && data.phrases && data.phrases.length > 0) {

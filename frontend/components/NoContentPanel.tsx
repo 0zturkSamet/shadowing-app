@@ -46,6 +46,13 @@ export function NoContentPanel({ videoId }: NoContentPanelProps) {
           }
         );
 
+        // Handle 401 Unauthorized - redirect to login
+        if (response.status === 401) {
+          localStorage.removeItem('auth_token');
+          router.push('/auth/login');
+          return;
+        }
+
         const data = await response.json();
 
         if (data.recommendations && Array.isArray(data.recommendations)) {
@@ -159,7 +166,7 @@ export function NoContentPanel({ videoId }: NoContentPanelProps) {
             ← Go Back
           </button>
           <button
-            onClick={() => router.push('/search')}
+            onClick={() => router.push('/')}
             className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
           >
             🔍 Search for Videos

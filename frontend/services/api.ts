@@ -37,7 +37,7 @@ api.interceptors.response.use(
         case 401:
           // Unauthorized - clear token and redirect to login
           localStorage.removeItem('auth_token');
-          // window.location.href = '/login';
+          window.location.href = '/auth/login';
           break;
         case 403:
           console.error('Forbidden: You do not have permission to access this resource');
