@@ -155,10 +155,15 @@ class PhraseSchema(BaseModel):
 
 
 class TranscriptResponse(BaseModel):
-    """Schema for transcript response."""
+    """Schema for transcript response with intelligent fallback metadata."""
 
     video_id: int = Field(..., description="Database video ID")
     phrases: List[PhraseSchema] = Field(..., description="List of transcript phrases")
+    source: str = Field(..., description="Content source: transcript/captions/auto_captions")
+    quality: str = Field(..., description="Content quality: best/good/acceptable")
+    language: str = Field(..., description="Content language code")
+    warning: Optional[str] = Field(None, description="Warning message if using fallback content")
+    is_auto_generated: bool = Field(..., description="Whether content is auto-generated")
 
     model_config = {
         "from_attributes": True,
@@ -167,16 +172,25 @@ class TranscriptResponse(BaseModel):
                 "video_id": 1,
                 "phrases": [
                     {
+                        "index": 0,
                         "text": "Hola, ¿cómo estás?",
                         "start_time": 0.5,
-                        "duration": 2.3
+                        "duration": 2.3,
+                        "language": "es"
                     },
                     {
+                        "index": 1,
                         "text": "Muy bien, gracias",
                         "start_time": 2.8,
-                        "duration": 1.5
+                        "duration": 1.5,
+                        "language": "es"
                     }
-                ]
+                ],
+                "source": "transcript",
+                "quality": "best",
+                "language": "es",
+                "warning": None,
+                "is_auto_generated": False
             }
         }
     }
