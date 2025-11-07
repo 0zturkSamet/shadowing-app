@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 
 interface AuthContextType {
   user: AuthUser | null;
+  token: string | null;
   loading: boolean;
   error: string | null;
   login: (data: LoginData) => Promise<void>;
@@ -23,6 +24,7 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -30,14 +32,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Check for existing token and fetch user on mount
   useEffect(() => {
     const initAuth = async () => {
-      const token = localStorage.getItem('auth_token');
-      if (token) {
+      const storedToken = localStorage.getItem('auth_token');
+      if (storedToken) {
+        setToken(storedToken);
         try {
           const currentUser = await authApi.getCurrentUser();
           setUser(currentUser);
         } catch (err) {
           // Token is invalid or expired, clear it
           localStorage.removeItem('auth_token');
+          setToken(null);
           setUser(null);
         }
       }
@@ -63,6 +67,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setLoading(true);
       setError(null);
       await authApi.login(data);
+      const storedToken = localStorage.getItem('auth_token');
+      setToken(storedToken);
       const currentUser = await authApi.getCurrentUser();
       setUser(currentUser);
       router.push('/');
@@ -80,6 +86,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setLoading(true);
       setError(null);
       await authApi.register(data);
+      const storedToken = localStorage.getItem('auth_token');
+      setToken(storedToken);
       const currentUser = await authApi.getCurrentUser();
       setUser(currentUser);
       router.push('/');
@@ -96,6 +104,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setLoading(true);
       await authApi.logout();
+      setToken(null);
       setUser(null);
       router.push('/auth/login');
     } catch (err) {
@@ -111,6 +120,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const value: AuthContextType = {
     user,
+    token,
     loading,
     error,
     login,
