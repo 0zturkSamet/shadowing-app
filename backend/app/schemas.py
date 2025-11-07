@@ -135,16 +135,20 @@ class VideoResponse(BaseModel):
 class PhraseSchema(BaseModel):
     """Schema for a transcript phrase."""
 
+    index: int = Field(..., description="Phrase index in transcript")
     text: str = Field(..., description="Phrase text")
     start_time: float = Field(..., description="Start time in seconds")
     duration: float = Field(..., description="Phrase duration in seconds")
+    language: str = Field(..., description="Language code")
 
     model_config = {
         "json_schema_extra": {
             "example": {
+                "index": 0,
                 "text": "Hola, ¿cómo estás?",
                 "start_time": 0.5,
-                "duration": 2.3
+                "duration": 2.3,
+                "language": "es"
             }
         }
     }
@@ -210,6 +214,139 @@ class Token(BaseModel):
             "example": {
                 "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                 "token_type": "bearer"
+            }
+        }
+    }
+
+
+# Video Player Schemas
+class VideoPlayerResponse(BaseModel):
+    """Schema for video player response with user progress."""
+
+    id: int = Field(..., description="Database video ID")
+    youtube_id: str = Field(..., description="YouTube video ID")
+    title: str = Field(..., description="Video title")
+    duration: int = Field(..., description="Video duration in seconds")
+    channel_name: str = Field(..., description="Channel name")
+    phrases: List[PhraseSchema] = Field(..., description="List of transcript phrases")
+    current_progress: Optional[float] = Field(0, description="User's current progress in seconds")
+    is_completed: Optional[bool] = Field(False, description="Whether user has completed the video")
+
+    model_config = {
+        "from_attributes": True,
+        "json_schema_extra": {
+            "example": {
+                "id": 1,
+                "youtube_id": "dQw4w9WgXcQ",
+                "title": "Spanish Lesson - Basic Greetings",
+                "duration": 300,
+                "channel_name": "Spanish Academy",
+                "phrases": [
+                    {
+                        "index": 0,
+                        "text": "Hola, ¿cómo estás?",
+                        "start_time": 0.5,
+                        "duration": 2.3,
+                        "language": "es"
+                    }
+                ],
+                "current_progress": 45.5,
+                "is_completed": False
+            }
+        }
+    }
+
+
+class PhraseAttemptRequest(BaseModel):
+    """Schema for recording a phrase attempt."""
+
+    phrase_index: int = Field(..., description="Index of the phrase being attempted")
+    correct: bool = Field(..., description="Whether the attempt was correct")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "phrase_index": 0,
+                "correct": True
+            }
+        }
+    }
+
+
+class VideoProgressUpdateRequest(BaseModel):
+    """Schema for updating video progress."""
+
+    current_timestamp: float = Field(..., ge=0, description="Current playback position in seconds")
+    completed: bool = Field(False, description="Whether the video is completed")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "current_timestamp": 45.5,
+                "completed": False
+            }
+        }
+    }
+
+
+class VideoProgressResponse(BaseModel):
+    """Schema for video progress response."""
+
+    video_id: int = Field(..., description="Database video ID")
+    current_timestamp: float = Field(..., description="Current playback position in seconds")
+    completed_at: Optional[datetime] = Field(None, description="When video was completed")
+    total_watch_time: int = Field(..., description="Total watch time in seconds")
+    is_completed: bool = Field(..., description="Whether video is completed")
+
+    model_config = {
+        "from_attributes": True,
+        "json_schema_extra": {
+            "example": {
+                "video_id": 1,
+                "current_timestamp": 45.5,
+                "completed_at": None,
+                "total_watch_time": 120,
+                "is_completed": False
+            }
+        }
+    }
+
+
+class PhraseAttemptResponse(BaseModel):
+    """Schema for phrase attempt response."""
+
+    phrase_index: int = Field(..., description="Index of the phrase")
+    attempts: int = Field(..., description="Total number of attempts for this phrase")
+    correct: bool = Field(..., description="Whether the latest attempt was correct")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "phrase_index": 0,
+                "attempts": 3,
+                "correct": True
+            }
+        }
+    }
+
+
+class UserStatsResponse(BaseModel):
+    """Schema for user learning statistics."""
+
+    total_videos_watched: int = Field(..., description="Total number of videos watched")
+    total_phrases_practiced: int = Field(..., description="Total number of phrases practiced")
+    phrases_correct: int = Field(..., description="Number of correct phrase attempts")
+    accuracy: float = Field(..., ge=0, le=100, description="Overall accuracy percentage")
+    total_watch_time: int = Field(..., description="Total watch time in seconds")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "total_videos_watched": 5,
+                "total_phrases_practiced": 150,
+                "phrases_correct": 120,
+                "accuracy": 80.0,
+                "total_watch_time": 3600
             }
         }
     }

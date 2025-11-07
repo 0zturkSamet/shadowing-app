@@ -5,18 +5,27 @@ This module handles video search and transcript retrieval from YouTube.
 """
 import logging
 from typing import Optional
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.core.database import get_db
+from app.core.dependencies import get_current_user
 from app.schemas import (
     VideoResponse,
     VideoSearchResponse,
     TranscriptResponse,
     VideoCreate,
-    PhraseSchema
+    PhraseSchema,
+    VideoPlayerResponse,
+    PhraseAttemptRequest,
+    PhraseAttemptResponse,
+    VideoProgressUpdateRequest,
+    VideoProgressResponse,
+    UserStatsResponse
 )
-from app.models import Video, Transcript
+from app.models import Video, Transcript, User, VideoProgress, PhraseAttempt
 from app.services.youtube_service import YouTubeService
 
 
@@ -317,4 +326,417 @@ async def get_transcript(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch transcript: {str(e)}"
+        )
+
+
+@router.get("/{video_id}/player", response_model=VideoPlayerResponse)
+async def get_video_player(
+    video_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    youtube_service: YouTubeService = Depends(get_youtube_service)
+) -> VideoPlayerResponse:
+    """
+    Get video player data with user progress.
+
+    Retrieves video metadata, transcript phrases, and user's current progress
+    for displaying in the video player interface.
+
+    Args:
+        video_id: YouTube video ID (e.g., 'dQw4w9WgXcQ')
+        current_user: Authenticated user
+        db: Database session
+        youtube_service: YouTube service instance
+
+    Returns:
+        VideoPlayerResponse: Video data with phrases and user progress
+
+    Raises:
+        HTTPException: If video not found (404) or fetch fails (500)
+
+    Example:
+        GET /api/videos/dQw4w9WgXcQ/player
+    """
+    try:
+        logger.info(f"Fetching video player data for user {current_user.id}: {video_id}")
+
+        # Get or create video record
+        video = db.query(Video).filter(Video.youtube_id == video_id).first()
+
+        if not video:
+            # Fetch video metadata from YouTube
+            logger.info(f"Video not in database, fetching metadata: {video_id}")
+            video_metadata = youtube_service.get_video_metadata(video_id)
+
+            video = Video(
+                youtube_id=video_metadata['youtube_id'],
+                title=video_metadata['title'],
+                description=video_metadata.get('description', ''),
+                language=video_metadata.get('language', 'unknown'),
+                duration=video_metadata['duration'],
+                channel_name=video_metadata['channel_name'],
+                thumbnail_url=video_metadata['thumbnail_url'],
+                view_count=video_metadata['view_count']
+            )
+            db.add(video)
+            db.commit()
+            db.refresh(video)
+
+        # Get transcript
+        transcript = db.query(Transcript).filter(Transcript.video_id == video.id).first()
+
+        if not transcript:
+            # Fetch transcript from YouTube
+            logger.info(f"Fetching transcript from YouTube: {video_id}")
+            transcript_data = youtube_service.get_transcript(video_id, None)
+
+            transcript = Transcript(
+                video_id=video.id,
+                phrases=transcript_data['phrases']
+            )
+            db.add(transcript)
+            db.commit()
+            db.refresh(transcript)
+
+        # Get user's progress
+        progress = db.query(VideoProgress).filter(
+            VideoProgress.user_id == current_user.id,
+            VideoProgress.video_id == video.id
+        ).first()
+
+        # Build phrases with index and language
+        phrases = []
+        for idx, phrase in enumerate(transcript.phrases):
+            phrases.append(PhraseSchema(
+                index=idx,
+                text=phrase['text'],
+                start_time=phrase['start_time'],
+                duration=phrase['duration'],
+                language=video.language
+            ))
+
+        # Build response
+        return VideoPlayerResponse(
+            id=video.id,
+            youtube_id=video.youtube_id,
+            title=video.title,
+            duration=video.duration,
+            channel_name=video.channel_name,
+            phrases=phrases,
+            current_progress=progress.current_timestamp if progress else 0.0,
+            is_completed=progress.completed_at is not None if progress else False
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching video player data for {video_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch video player data: {str(e)}"
+        )
+
+
+@router.post("/{video_id}/progress", response_model=VideoProgressResponse)
+async def update_video_progress(
+    video_id: str,
+    request: VideoProgressUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> VideoProgressResponse:
+    """
+    Update user's video progress.
+
+    Records the user's current playback position and marks video as completed
+    if requested. Updates total watch time.
+
+    Args:
+        video_id: YouTube video ID (e.g., 'dQw4w9WgXcQ')
+        request: Progress update request with timestamp and completion status
+        current_user: Authenticated user
+        db: Database session
+
+    Returns:
+        VideoProgressResponse: Updated progress information
+
+    Raises:
+        HTTPException: If video not found (404) or update fails (500)
+
+    Example:
+        POST /api/videos/dQw4w9WgXcQ/progress
+        {
+            "current_timestamp": 45.5,
+            "completed": false
+        }
+    """
+    try:
+        logger.info(f"Updating video progress for user {current_user.id}: {video_id}")
+
+        # Get video
+        video = db.query(Video).filter(Video.youtube_id == video_id).first()
+        if not video:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Video not found: {video_id}"
+            )
+
+        # Validate timestamp
+        if request.current_timestamp < 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current timestamp cannot be negative"
+            )
+
+        if request.current_timestamp > video.duration:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Current timestamp ({request.current_timestamp}) exceeds video duration ({video.duration})"
+            )
+
+        # Get or create progress record
+        progress = db.query(VideoProgress).filter(
+            VideoProgress.user_id == current_user.id,
+            VideoProgress.video_id == video.id
+        ).first()
+
+        if progress:
+            # Update existing progress
+            old_timestamp = progress.current_timestamp
+            progress.current_timestamp = request.current_timestamp
+            progress.updated_at = datetime.utcnow()
+
+            # Calculate watch time increment (if moving forward)
+            if request.current_timestamp > old_timestamp:
+                time_delta = int(request.current_timestamp - old_timestamp)
+                # Cap the increment to 60 seconds to prevent abuse
+                if time_delta > 0 and time_delta <= 60:
+                    progress.total_watch_time += time_delta
+
+            # Mark as completed if requested
+            if request.completed and not progress.completed_at:
+                progress.completed_at = datetime.utcnow()
+
+        else:
+            # Create new progress record
+            progress = VideoProgress(
+                user_id=current_user.id,
+                video_id=video.id,
+                current_timestamp=request.current_timestamp,
+                completed_at=datetime.utcnow() if request.completed else None,
+                total_watch_time=int(request.current_timestamp)
+            )
+            db.add(progress)
+
+        db.commit()
+        db.refresh(progress)
+
+        logger.info(f"Updated progress for video {video_id}: timestamp={progress.current_timestamp}, completed={progress.completed_at is not None}")
+
+        return VideoProgressResponse(
+            video_id=video.id,
+            current_timestamp=progress.current_timestamp,
+            completed_at=progress.completed_at,
+            total_watch_time=progress.total_watch_time,
+            is_completed=progress.completed_at is not None
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating video progress for {video_id}: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update video progress: {str(e)}"
+        )
+
+
+@router.post("/{video_id}/phrases/{phrase_index}", response_model=PhraseAttemptResponse)
+async def record_phrase_attempt(
+    video_id: str,
+    phrase_index: int,
+    request: PhraseAttemptRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> PhraseAttemptResponse:
+    """
+    Record a phrase practice attempt.
+
+    Records when a user attempts to practice a specific phrase, tracking
+    whether they got it correct and how many times they've attempted it.
+
+    Args:
+        video_id: YouTube video ID (e.g., 'dQw4w9WgXcQ')
+        phrase_index: Index of the phrase in the transcript
+        request: Attempt details (phrase_index, correct)
+        current_user: Authenticated user
+        db: Database session
+
+    Returns:
+        PhraseAttemptResponse: Updated attempt statistics
+
+    Raises:
+        HTTPException: If video not found (404), invalid phrase (400), or record fails (500)
+
+    Example:
+        POST /api/videos/dQw4w9WgXcQ/phrases/0
+        {
+            "phrase_index": 0,
+            "correct": true
+        }
+    """
+    try:
+        logger.info(f"Recording phrase attempt for user {current_user.id}: video={video_id}, phrase={phrase_index}")
+
+        # Get video
+        video = db.query(Video).filter(Video.youtube_id == video_id).first()
+        if not video:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Video not found: {video_id}"
+            )
+
+        # Get transcript to validate phrase index and get phrase text
+        transcript = db.query(Transcript).filter(Transcript.video_id == video.id).first()
+        if not transcript:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Transcript not found for video: {video_id}"
+            )
+
+        if phrase_index < 0 or phrase_index >= len(transcript.phrases):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid phrase index: {phrase_index}. Video has {len(transcript.phrases)} phrases."
+            )
+
+        phrase_text = transcript.phrases[phrase_index]['text']
+
+        # Check if there's an existing attempt for this phrase (most recent)
+        existing_attempt = db.query(PhraseAttempt).filter(
+            PhraseAttempt.user_id == current_user.id,
+            PhraseAttempt.video_id == video.id,
+            PhraseAttempt.phrase_index == phrase_index
+        ).order_by(PhraseAttempt.timestamp.desc()).first()
+
+        # Create new attempt record
+        new_attempt = PhraseAttempt(
+            user_id=current_user.id,
+            video_id=video.id,
+            phrase_index=phrase_index,
+            phrase_text=phrase_text,
+            attempts=existing_attempt.attempts + 1 if existing_attempt else 1,
+            correct=request.correct,
+            timestamp=datetime.utcnow()
+        )
+        db.add(new_attempt)
+        db.commit()
+        db.refresh(new_attempt)
+
+        logger.info(f"Recorded phrase attempt: video={video_id}, phrase={phrase_index}, correct={request.correct}, total_attempts={new_attempt.attempts}")
+
+        return PhraseAttemptResponse(
+            phrase_index=phrase_index,
+            attempts=new_attempt.attempts,
+            correct=request.correct
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error recording phrase attempt for {video_id}, phrase {phrase_index}: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to record phrase attempt: {str(e)}"
+        )
+
+
+@router.get("/stats/overview", response_model=UserStatsResponse)
+async def get_user_stats(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> UserStatsResponse:
+    """
+    Get user's learning statistics.
+
+    Provides an overview of the user's learning progress including videos watched,
+    phrases practiced, accuracy, and total watch time.
+
+    Args:
+        current_user: Authenticated user
+        db: Database session
+
+    Returns:
+        UserStatsResponse: User's learning statistics
+
+    Raises:
+        HTTPException: If stats calculation fails (500)
+
+    Example:
+        GET /api/videos/stats/overview
+    """
+    try:
+        logger.info(f"Fetching user stats for user {current_user.id}")
+
+        # Count completed videos
+        total_videos_watched = db.query(func.count(VideoProgress.id)).filter(
+            VideoProgress.user_id == current_user.id,
+            VideoProgress.completed_at.isnot(None)
+        ).scalar() or 0
+
+        # Count total phrases practiced (distinct phrase attempts)
+        total_phrases_practiced = db.query(
+            func.count(func.distinct(PhraseAttempt.video_id, PhraseAttempt.phrase_index))
+        ).filter(
+            PhraseAttempt.user_id == current_user.id
+        ).scalar() or 0
+
+        # Count correct phrase attempts (latest attempt for each phrase)
+        # This is more complex - we need to get the latest attempt for each phrase
+        # and count how many are correct
+        subquery = db.query(
+            PhraseAttempt.video_id,
+            PhraseAttempt.phrase_index,
+            func.max(PhraseAttempt.timestamp).label('max_timestamp')
+        ).filter(
+            PhraseAttempt.user_id == current_user.id
+        ).group_by(
+            PhraseAttempt.video_id,
+            PhraseAttempt.phrase_index
+        ).subquery()
+
+        phrases_correct = db.query(func.count(PhraseAttempt.id)).join(
+            subquery,
+            (PhraseAttempt.video_id == subquery.c.video_id) &
+            (PhraseAttempt.phrase_index == subquery.c.phrase_index) &
+            (PhraseAttempt.timestamp == subquery.c.max_timestamp)
+        ).filter(
+            PhraseAttempt.user_id == current_user.id,
+            PhraseAttempt.correct == True
+        ).scalar() or 0
+
+        # Calculate accuracy
+        accuracy = (phrases_correct / total_phrases_practiced * 100) if total_phrases_practiced > 0 else 0.0
+
+        # Sum total watch time
+        total_watch_time = db.query(func.sum(VideoProgress.total_watch_time)).filter(
+            VideoProgress.user_id == current_user.id
+        ).scalar() or 0
+
+        logger.info(f"User stats: videos={total_videos_watched}, phrases={total_phrases_practiced}, accuracy={accuracy:.2f}%")
+
+        return UserStatsResponse(
+            total_videos_watched=total_videos_watched,
+            total_phrases_practiced=total_phrases_practiced,
+            phrases_correct=phrases_correct,
+            accuracy=round(accuracy, 2),
+            total_watch_time=total_watch_time
+        )
+
+    except Exception as e:
+        logger.error(f"Error fetching user stats: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch user stats: {str(e)}"
         )
