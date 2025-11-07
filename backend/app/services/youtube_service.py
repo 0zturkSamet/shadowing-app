@@ -7,6 +7,7 @@ YouTube Transcript API for searching videos and fetching transcripts.
 import logging
 from typing import List, Dict, Optional, Any
 import isodate
+from xml.etree.ElementTree import ParseError
 
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -262,19 +263,31 @@ class YouTubeService:
             return result
 
         except TranscriptsDisabled:
-            error_msg = f"Transcripts are disabled for video: {video_id}"
-            logger.warning(error_msg)
+            error_msg = f"Transcripts are disabled for this video. The video owner may have turned off captions."
+            logger.warning(f"{error_msg} (video_id: {video_id})")
             raise Exception(error_msg)
         except NoTranscriptFound:
-            error_msg = f"No transcript found for video: {video_id}"
-            logger.warning(error_msg)
+            error_msg = f"No transcript available for this video. Please try a different video with captions enabled."
+            logger.warning(f"{error_msg} (video_id: {video_id})")
             raise Exception(error_msg)
         except VideoUnavailable:
-            error_msg = f"Video unavailable: {video_id}"
-            logger.warning(error_msg)
+            error_msg = f"Video is unavailable or has been removed."
+            logger.warning(f"{error_msg} (video_id: {video_id})")
+            raise Exception(error_msg)
+        except ParseError as e:
+            # XML parsing error - usually means no transcript data available
+            error_msg = f"No transcript data available for this video. The video may not have captions."
+            logger.warning(f"{error_msg} (video_id: {video_id}, parse_error: {e})")
             raise Exception(error_msg)
         except Exception as e:
-            logger.error(f"Error fetching transcript for {video_id}: {e}")
+            # Catch any other errors including generic XML/parsing issues
+            error_str = str(e).lower()
+            if 'no element found' in error_str or 'xml' in error_str or 'parse' in error_str:
+                error_msg = f"No transcript data available for this video. The video may not have captions."
+                logger.warning(f"{error_msg} (video_id: {video_id}, error: {e})")
+                raise Exception(error_msg)
+
+            logger.error(f"Unexpected error fetching transcript for {video_id}: {e}")
             raise Exception(f"Failed to fetch transcript: {str(e)}")
 
     def get_available_transcripts(self, video_id: str) -> List[Dict[str, str]]:

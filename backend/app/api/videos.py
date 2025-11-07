@@ -317,10 +317,16 @@ async def get_transcript(
 
         # Check if it's a transcript availability issue
         error_str = str(e).lower()
-        if 'disabled' in error_str or 'not found' in error_str or 'unavailable' in error_str:
+        transcript_keywords = [
+            'disabled', 'not found', 'unavailable',
+            'no transcript', 'no element found', 'caption',
+            'not available'
+        ]
+
+        if any(keyword in error_str for keyword in transcript_keywords):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Transcript not available for this video: {str(e)}"
+                detail=str(e)  # Use the improved error message from youtube_service
             )
 
         raise HTTPException(
