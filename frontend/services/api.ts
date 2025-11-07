@@ -167,16 +167,7 @@ export const register = async (data: RegisterData): Promise<AuthResponse> => {
  */
 export const login = async (data: LoginData): Promise<AuthResponse> => {
   try {
-    // Convert to form data for OAuth2 password flow
-    const formData = new FormData();
-    formData.append('username', data.email);
-    formData.append('password', data.password);
-
-    const response = await api.post('/auth/login', formData, {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-    });
+    const response = await api.post('/auth/login', data);
 
     const authResponse: AuthResponse = response.data;
     // Store token in localStorage
