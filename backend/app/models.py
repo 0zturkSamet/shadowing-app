@@ -3,7 +3,7 @@ SQLAlchemy database models.
 
 This module defines the database schema for users, videos, and user progress.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Index, Float, JSON, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
@@ -22,7 +22,7 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     name = Column(String(255), nullable=False)
     learning_language = Column(String(50), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
     progress = relationship("UserProgress", back_populates="user")
@@ -45,8 +45,8 @@ class Video(Base):
     channel_name = Column(String(255), nullable=False)
     thumbnail_url = Column(String(500), nullable=False)
     view_count = Column(Integer, default=0, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
     progress = relationship("UserProgress", back_populates="video")
@@ -64,7 +64,7 @@ class Transcript(Base):
     id = Column(Integer, primary_key=True, index=True)
     video_id = Column(Integer, ForeignKey("videos.id"), nullable=False, index=True)
     phrases = Column(JSON, nullable=False)  # Array of {text, start_time, duration}
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
     video = relationship("Video", back_populates="transcripts")
@@ -83,7 +83,7 @@ class UserProgress(Base):
     video_id = Column(Integer, ForeignKey("videos.id"), nullable=False)
     phrase_index = Column(Integer, nullable=False)
     score = Column(Float, nullable=False, default=0.0)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
     user = relationship("User", back_populates="progress")
@@ -110,8 +110,8 @@ class VideoProgress(Base):
     current_timestamp = Column(Float, nullable=False, default=0.0)  # Current playback position in seconds
     completed_at = Column(DateTime, nullable=True)  # When video was completed (null if not completed)
     total_watch_time = Column(Integer, nullable=False, default=0)  # Total watch time in seconds
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Composite index for efficient user-video lookups
     __table_args__ = (
