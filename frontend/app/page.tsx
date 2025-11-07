@@ -34,6 +34,23 @@ export default function Home() {
     }
   }, [user, loading, router]);
 
+  // Restore search state from sessionStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedState = sessionStorage.getItem('search_state');
+      if (savedState) {
+        try {
+          const { videos: savedVideos, query, hasSearched: searched } = JSON.parse(savedState);
+          setVideos(savedVideos || []);
+          setSearchQuery(query || '');
+          setHasSearched(searched || false);
+        } catch (err) {
+          console.error('Error restoring search state:', err);
+        }
+      }
+    }
+  }, []);
+
   const handleSearch = async (query: string, language: string) => {
     setIsLoading(true);
     setError(null);
@@ -43,6 +60,15 @@ export default function Home() {
     try {
       const response = await searchVideosApi(query, language);
       setVideos(response.videos);
+
+      // Save search state to sessionStorage
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('search_state', JSON.stringify({
+          videos: response.videos,
+          query,
+          hasSearched: true
+        }));
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to search videos';
       setError(errorMessage);

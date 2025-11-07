@@ -43,6 +43,45 @@ class YouTubeService:
         self.youtube = build('youtube', 'v3', developerKey=api_key)
         logger.info("YouTubeService initialized successfully")
 
+    def _has_accessible_transcript(self, video_id: str) -> bool:
+        """
+        Check if a video has an accessible transcript.
+
+        This pre-verification ensures users only see videos they can practice with.
+
+        Args:
+            video_id: YouTube video ID
+
+        Returns:
+            bool: True if video has accessible transcript, False otherwise
+        """
+        try:
+            # Try to list available transcripts
+            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+
+            # Check if there are any transcripts available (manual or auto-generated)
+            # We accept both for maximum coverage
+            transcripts = list(transcript_list)
+
+            if len(transcripts) > 0:
+                logger.debug(f"Video {video_id} has {len(transcripts)} transcript(s)")
+                return True
+
+            return False
+
+        except TranscriptsDisabled:
+            logger.debug(f"Transcripts disabled for video: {video_id}")
+            return False
+        except NoTranscriptFound:
+            logger.debug(f"No transcript found for video: {video_id}")
+            return False
+        except VideoUnavailable:
+            logger.debug(f"Video unavailable: {video_id}")
+            return False
+        except Exception as e:
+            logger.debug(f"Error checking transcript for {video_id}: {e}")
+            return False
+
     def search_videos(
         self,
         query: str,
@@ -75,14 +114,20 @@ class YouTubeService:
             return cached_results
 
         try:
+            # Search for MORE videos initially to filter for transcript availability
+            # Request 5x the desired amount since we're pre-verifying transcripts
+            # This accounts for videos that claim to have captions but don't have accessible transcripts
+            search_max = min(max_results * 5, 50)  # YouTube API max is 50
+
             # Search for videos
             search_response = self.youtube.search().list(
                 q=query,
                 part='id,snippet',
                 type='video',
                 relevanceLanguage=language,
-                maxResults=max_results,
-                videoCaption='closedCaption'  # Only videos with captions
+                maxResults=search_max,
+                videoCaption='closedCaption',  # Only videos with captions
+                videoDuration='medium'  # Prefer videos 4-20 minutes (better for learning)
             ).execute()
 
             video_ids = [
@@ -101,15 +146,32 @@ class YouTubeService:
             ).execute()
 
             results = []
+            videos_checked = 0
+            videos_with_transcripts = 0
+
             for item in videos_response.get('items', []):
                 try:
                     # Parse duration from ISO 8601 format
                     duration_str = item['contentDetails']['duration']
                     duration_seconds = int(isodate.parse_duration(duration_str).total_seconds())
 
+                    # Skip very short videos (< 30 seconds) - unlikely to be useful for learning
+                    if duration_seconds < 30:
+                        continue
+
+                    video_id = item['id']
+                    videos_checked += 1
+
+                    # PRE-VERIFY: Check if video has accessible transcript
+                    if not self._has_accessible_transcript(video_id):
+                        logger.debug(f"Skipping video {video_id} - no accessible transcript")
+                        continue
+
+                    videos_with_transcripts += 1
+
                     video_data = {
-                        'video_id': item['id'],
-                        'youtube_id': item['id'],
+                        'video_id': video_id,
+                        'youtube_id': video_id,
                         'title': item['snippet']['title'],
                         'description': item['snippet'].get('description', ''),
                         'duration': duration_seconds,
@@ -119,13 +181,21 @@ class YouTubeService:
                         'language': language
                     }
                     results.append(video_data)
+
+                    # Stop once we have enough results
+                    if len(results) >= max_results:
+                        break
+
                 except (KeyError, ValueError) as e:
                     logger.warning(f"Error parsing video {item.get('id')}: {e}")
                     continue
 
             # Cache results for 30 minutes
             cache_service.set(cache_key, results, expiration=1800)
-            logger.info(f"Found {len(results)} videos for query: {query}")
+            logger.info(
+                f"Search complete: {len(results)} verified videos found "
+                f"(checked {videos_checked}, {videos_with_transcripts} had transcripts)"
+            )
 
             return results
 
