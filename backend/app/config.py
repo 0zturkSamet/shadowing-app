@@ -38,10 +38,13 @@ class Settings:
     JWT_EXPIRATION_MINUTES: int = 60 * 24 * 7  # 7 days
 
     # CORS settings
-    ALLOWED_ORIGINS: List[str] = os.getenv(
-        "ALLOWED_ORIGINS",
-        "http://localhost:3000,http://localhost:8000"
-    ).split(",")
+    ALLOWED_ORIGINS: List[str] = [
+        origin.strip()
+        for origin in os.getenv(
+            "ALLOWED_ORIGINS",
+            "http://localhost:3000,http://localhost:8000"
+        ).split(",")
+    ]
 
     # Application settings
     APP_NAME: str = "ShadowSpeak API"
