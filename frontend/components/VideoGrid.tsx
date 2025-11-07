@@ -74,7 +74,7 @@ export default function VideoGrid({ videos, isLoading, onVideoClick }: VideoGrid
       {videos.map((video) => (
         <div
           key={video.id}
-          onClick={() => handleVideoClick(video.id)}
+          onClick={() => handleVideoClick(video.youtube_id)}
           className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:scale-105 cursor-pointer group"
         >
           {/* Thumbnail */}
