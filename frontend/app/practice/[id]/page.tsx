@@ -1,11 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Header from '@/components/Header';
-import { ArrowLeft, Loader2, AlertCircle, Clock } from 'lucide-react';
+import VideoPlayer from '@/components/VideoPlayer';
+import TranscriptViewer from '@/components/TranscriptViewer';
+import PlayerControls from '@/components/PlayerControls';
+import PracticeMode from '@/components/PracticeMode';
+import { ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
 import { VideoResponse, PhraseSchema } from '@/types/video';
 import { getVideoDetails, getTranscript } from '@/services/videoApi';
+import { useVideoPlayer } from '@/hooks/useVideoPlayer';
 
 export default function PracticePage() {
   const params = useParams();
@@ -16,7 +21,6 @@ export default function PracticePage() {
   const [phrases, setPhrases] = useState<PhraseSchema[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedPhraseIndex, setSelectedPhraseIndex] = useState<number | null>(null);
 
   // Fetch video details and transcript
   useEffect(() => {
@@ -45,22 +49,21 @@ export default function PracticePage() {
     }
   }, [videoId]);
 
-  /**
-   * Format timestamp to MM:SS
-   */
-  const formatTimestamp = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  // Initialize video player hook
+  const videoPlayerHook = useVideoPlayer({
+    videoId,
+    phrases,
+    initialProgress: 0,
+  });
+
+  // Handle phrase click - seek to phrase
+  const handlePhraseClick = (index: number, startTime: number) => {
+    videoPlayerHook.seekToPhrase(index);
   };
 
-  /**
-   * Handle phrase click to seek video
-   */
-  const handlePhraseClick = (index: number) => {
-    setSelectedPhraseIndex(index);
-    // Note: In a full implementation, you would use YouTube Player API
-    // to seek to the specific timestamp
+  // Handle progress update
+  const handleProgressUpdate = (timestamp: number) => {
+    // Progress is automatically tracked in the hook
   };
 
   // Loading state
@@ -127,70 +130,99 @@ export default function PracticePage() {
           Back to Home
         </button>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Video Player Section */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-              {/* Video Info Header */}
-              <div className="p-6 border-b border-gray-200">
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">{video.title}</h1>
-                <p className="text-gray-600">{video.channel_name}</p>
-              </div>
+        {/* Video Info Header */}
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">{video.title}</h1>
+          <p className="text-gray-600">{video.channel_name}</p>
+        </div>
 
-              {/* YouTube Embedded Player */}
-              <div className="relative w-full" style={{ paddingTop: '56.25%' }}>
-                <iframe
-                  className="absolute top-0 left-0 w-full h-full"
-                  src={`https://www.youtube.com/embed/${video.youtube_id}`}
-                  frameBorder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                  title={video.title}
-                />
-              </div>
+        {/* Main Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column - Video Player */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* Video Player */}
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+              <VideoPlayer
+                videoId={video.youtube_id}
+                phrases={phrases}
+                onPhraseClick={handlePhraseClick}
+                onProgressUpdate={handleProgressUpdate}
+                isPlaying={videoPlayerHook.isPlaying}
+                currentTime={videoPlayerHook.currentTime}
+                playbackSpeed={videoPlayerHook.playbackSpeed}
+                volume={videoPlayerHook.volume}
+                isMuted={videoPlayerHook.isMuted}
+                onPlay={videoPlayerHook.play}
+                onPause={videoPlayerHook.pause}
+                onTimeUpdate={videoPlayerHook.setCurrentTime}
+                onDurationChange={videoPlayerHook.setDuration}
+                onSeek={videoPlayerHook.seek}
+              />
+
+              {/* Player Controls */}
+              <PlayerControls
+                isPlaying={videoPlayerHook.isPlaying}
+                currentTime={videoPlayerHook.currentTime}
+                duration={videoPlayerHook.duration}
+                playbackSpeed={videoPlayerHook.playbackSpeed}
+                volume={videoPlayerHook.volume}
+                isMuted={videoPlayerHook.isMuted}
+                practiceMode={videoPlayerHook.practiceMode}
+                onPlayPause={videoPlayerHook.togglePlayPause}
+                onSpeedChange={videoPlayerHook.setPlaybackSpeed}
+                onVolumeChange={videoPlayerHook.setVolume}
+                onProgressChange={videoPlayerHook.seek}
+                onTogglePracticeMode={videoPlayerHook.togglePracticeMode}
+                onToggleFullscreen={videoPlayerHook.toggleFullscreen}
+                onToggleMute={videoPlayerHook.toggleMute}
+                onSkipBackward={() => videoPlayerHook.seek(videoPlayerHook.currentTime - 5)}
+                onSkipForward={() => videoPlayerHook.seek(videoPlayerHook.currentTime + 5)}
+              />
+            </div>
+
+            {/* Practice Mode Info (Desktop) */}
+            <div className="hidden lg:block">
+              <PracticeMode
+                practiceMode={videoPlayerHook.practiceMode}
+                onTogglePracticeMode={videoPlayerHook.togglePracticeMode}
+                practiceAttempts={videoPlayerHook.practiceAttempts}
+                totalPhrases={phrases.length}
+              />
             </div>
           </div>
 
-          {/* Transcript Section */}
+          {/* Right Column - Transcript */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-xl shadow-lg p-6 sticky top-8 max-h-[calc(100vh-6rem)] overflow-y-auto">
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Transcript</h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center justify-between">
+                <span>Transcript</span>
+                <span className="text-sm font-normal text-gray-500">
+                  {phrases.length} phrases
+                </span>
+              </h3>
 
-              {phrases.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-gray-500">No transcript available for this video.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {phrases.map((phrase, index) => (
-                    <div
-                      key={index}
-                      onClick={() => handlePhraseClick(index)}
-                      className={`p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
-                        selectedPhraseIndex === index
-                          ? 'bg-indigo-50 border-indigo-300 shadow-sm'
-                          : 'bg-gray-50 border-gray-200 hover:border-indigo-200'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center space-x-2 text-sm text-gray-600">
-                          <Clock className="w-4 h-4" />
-                          <span className="font-medium">
-                            {formatTimestamp(phrase.start_time)}
-                          </span>
-                        </div>
-                      </div>
-                      <p className={`text-sm leading-relaxed ${
-                        selectedPhraseIndex === index ? 'text-gray-900 font-medium' : 'text-gray-700'
-                      }`}>
-                        {phrase.text}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <TranscriptViewer
+                phrases={phrases}
+                currentTime={videoPlayerHook.currentTime}
+                currentPhraseIndex={videoPlayerHook.currentPhraseIndex}
+                onPhraseClick={handlePhraseClick}
+                practiceMode={videoPlayerHook.practiceMode}
+                practiceAttempts={videoPlayerHook.practiceAttempts}
+                onRevealPhrase={videoPlayerHook.revealPhrase}
+                currentLanguage={video.language}
+              />
             </div>
           </div>
+        </div>
+
+        {/* Practice Mode Info (Mobile) */}
+        <div className="lg:hidden mt-6">
+          <PracticeMode
+            practiceMode={videoPlayerHook.practiceMode}
+            onTogglePracticeMode={videoPlayerHook.togglePracticeMode}
+            practiceAttempts={videoPlayerHook.practiceAttempts}
+            totalPhrases={phrases.length}
+          />
         </div>
       </main>
     </div>
