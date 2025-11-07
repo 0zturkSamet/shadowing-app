@@ -89,6 +89,27 @@ async def search_videos(
     try:
         logger.info(f"Searching videos: query={q}, language={language}, max_results={max_results}")
 
+        # Check if searching for test videos
+        search_terms = ["test", "english", "spanish", "french", "german", "español", "français", "deutsch"]
+        is_test_search = any(term in q.lower() for term in search_terms)
+
+        if is_test_search:
+            # Return test videos from database
+            logger.info(f"Searching for test videos in database with language={language}")
+            test_videos = db.query(Video).filter(
+                Video.youtube_id.like('test_%'),
+                Video.language == language
+            ).limit(max_results).all()
+
+            if test_videos:
+                logger.info(f"Found {len(test_videos)} test videos")
+                return VideoSearchResponse(
+                    videos=test_videos,
+                    total_results=len(test_videos),
+                    query=q,
+                    language=language
+                )
+
         # Search YouTube
         search_results = youtube_service.search_videos(
             query=q,
@@ -287,7 +308,11 @@ async def get_transcript_or_captions(
         ).first()
 
         if existing_transcript:
-            logger.info(f"Content found in database (cached) for video: {video_id}")
+            # Check if this is a test video
+            is_test_video = video.youtube_id.startswith('test_')
+            source_type = "test_seed" if is_test_video else "transcript"
+
+            logger.info(f"Content found in database ({'test video' if is_test_video else 'cached'}) for video: {video_id}")
 
             # Build phrases with proper schema
             phrase_objects = []
@@ -304,7 +329,7 @@ async def get_transcript_or_captions(
             return TranscriptResponse(
                 video_id=video.id,
                 phrases=phrase_objects,
-                source="transcript",  # Cached content is assumed to be transcript
+                source=source_type,  # Mark test videos differently
                 quality="best",  # Cached content is assumed to be best quality
                 language=video.language,
                 warning=None,
@@ -518,6 +543,14 @@ async def get_video_player(
         transcript = db.query(Transcript).filter(Transcript.video_id == video.id).first()
 
         if not transcript:
+            # Check if this is a test video (shouldn't happen if seed ran correctly)
+            if video.youtube_id.startswith('test_'):
+                logger.warning(f"Test video {video_id} missing transcript - this shouldn't happen!")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Test video is missing transcript. Please run the seed script."
+                )
+
             # Use intelligent fallback system
             logger.info(f"Using intelligent fallback system for player: {video_id}")
             result = youtube_service.get_content_for_practice(video_id)
