@@ -287,10 +287,28 @@ async def get_transcript_or_captions(
         ).first()
 
         if existing_transcript:
-            logger.info(f"Content found in database for video: {video_id}")
+            logger.info(f"Content found in database (cached) for video: {video_id}")
+
+            # Build phrases with proper schema
+            phrase_objects = []
+            for idx, phrase in enumerate(existing_transcript.phrases):
+                phrase_objects.append(PhraseSchema(
+                    index=idx,
+                    text=phrase['text'],
+                    start_time=phrase['start_time'],
+                    duration=phrase['duration'],
+                    language=phrase.get('language', video.language)
+                ))
+
+            # For cached transcripts, assume best quality (they were successfully fetched before)
             return TranscriptResponse(
                 video_id=video.id,
-                phrases=[PhraseSchema(**phrase) for phrase in existing_transcript.phrases]
+                phrases=phrase_objects,
+                source="transcript",  # Cached content is assumed to be transcript
+                quality="best",  # Cached content is assumed to be best quality
+                language=video.language,
+                warning=None,
+                is_auto_generated=False
             )
 
         # Use the NEW intelligent fallback system!
@@ -329,9 +347,25 @@ async def get_transcript_or_captions(
         if warning:
             logger.info(f"⚠️  Warning: {warning}")
 
+        # Build phrases with proper schema
+        phrase_objects = []
+        for idx, phrase in enumerate(phrases):
+            phrase_objects.append(PhraseSchema(
+                index=idx,
+                text=phrase['text'],
+                start_time=phrase['start_time'],
+                duration=phrase['duration'],
+                language=content_data.get('language', video.language)
+            ))
+
         return TranscriptResponse(
             video_id=video.id,
-            phrases=[PhraseSchema(**phrase) for phrase in phrases]
+            phrases=phrase_objects,
+            source=source,
+            quality=quality,
+            language=content_data.get('language', video.language),
+            warning=warning,
+            is_auto_generated=(source == "auto_captions")
         )
 
     except HTTPException:
