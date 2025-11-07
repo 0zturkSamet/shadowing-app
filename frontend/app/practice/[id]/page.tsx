@@ -44,7 +44,7 @@ export default function PracticePage() {
   useEffect(() => {
     const fetchContent = async () => {
       if (!token) {
-        router.push('/login');
+        router.push('/auth/login');
         return;
       }
 
