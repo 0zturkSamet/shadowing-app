@@ -1,230 +1,149 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Header from '@/components/Header';
-import VideoPlayer from '@/components/VideoPlayer';
-import TranscriptViewer from '@/components/TranscriptViewer';
-import PlayerControls from '@/components/PlayerControls';
-import PracticeMode from '@/components/PracticeMode';
-import { ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
-import { VideoResponse, PhraseSchema } from '@/types/video';
-import { getVideoDetails, getTranscript } from '@/services/videoApi';
-import { useVideoPlayer } from '@/hooks/useVideoPlayer';
+import { VideoPlayer } from '@/components/VideoPlayer';
+import { TranscriptViewer } from '@/components/TranscriptViewer';
+import { NoContentPanel } from '@/components/NoContentPanel';
+import { useAuth } from '@/hooks/useAuth';
+
+interface TranscriptResponse {
+  status: "success" | "no_content" | "error";
+  source?: "transcript" | "captions" | "auto_captions";
+  quality?: "best" | "good" | "acceptable";
+  phrases?: Array<{
+    text: string;
+    start_time: number;
+    duration: number;
+  }>;
+  warning?: string;
+  is_auto_generated?: boolean;
+  message?: string;
+  suggestion?: string;
+}
 
 export default function PracticePage() {
   const params = useParams();
   const router = useRouter();
+  const { token } = useAuth();
   const videoId = params.id as string;
 
-  const [video, setVideo] = useState<VideoResponse | null>(null);
-  const [phrases, setPhrases] = useState<PhraseSchema[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // State management
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasContent, setHasContent] = useState(false);
+  const [transcriptSource, setTranscriptSource] = useState<
+    "transcript" | "captions" | "auto_captions" | null
+  >(null);
+  const [transcriptWarning, setTranscriptWarning] = useState<string | null>(null);
+  const [phrases, setPhrases] = useState<any[]>([]);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [practiceMode, setPracticeMode] = useState(false);
 
-  // Fetch video details and transcript
+  // Fetch transcript/captions on mount
   useEffect(() => {
-    const fetchVideoData = async () => {
-      setIsLoading(true);
-      setError(null);
+    const fetchContent = async () => {
+      if (!token) {
+        router.push('/login');
+        return;
+      }
 
       try {
-        const [videoDetails, transcriptData] = await Promise.all([
-          getVideoDetails(videoId),
-          getTranscript(videoId),
-        ]);
+        setLoading(true);
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/videos/${videoId}/transcript`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          }
+        );
 
-        setVideo(videoDetails);
-        setPhrases(transcriptData.phrases);
+        const data: TranscriptResponse = await response.json();
+
+        if (data.status === "success" && data.phrases && data.phrases.length > 0) {
+          // Content available
+          setHasContent(true);
+          setTranscriptSource(data.source || null);
+          setTranscriptWarning(data.warning || null);
+          setPhrases(data.phrases);
+        } else if (data.status === "no_content") {
+          // No content available
+          setHasContent(false);
+        } else {
+          // Error
+          setError(data.message || 'Failed to fetch content');
+          setHasContent(false);
+        }
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to load video';
-        setError(errorMessage);
+        console.error('Error fetching transcript:', err);
+        setError('Failed to load practice content');
+        setHasContent(false);
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
     };
 
-    if (videoId) {
-      fetchVideoData();
-    }
-  }, [videoId]);
-
-  // Initialize video player hook
-  const videoPlayerHook = useVideoPlayer({
-    videoId,
-    phrases,
-    initialProgress: 0,
-  });
-
-  // Handle phrase click - seek to phrase
-  const handlePhraseClick = (index: number, startTime: number) => {
-    videoPlayerHook.seekToPhrase(index);
-  };
-
-  // Handle progress update
-  const handleProgressUpdate = (timestamp: number) => {
-    // Progress is automatically tracked in the hook
-  };
+    fetchContent();
+  }, [videoId, token, router]);
 
   // Loading state
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-indigo-50/30 to-purple-50/30">
-        <Header />
-        <main className="container mx-auto px-4 py-8">
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="text-center">
-              <Loader2 className="w-16 h-16 text-indigo-600 animate-spin mx-auto mb-4" />
-              <p className="text-xl text-gray-600">Loading video...</p>
-            </div>
-          </div>
-        </main>
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-gray-500">Loading practice session...</p>
       </div>
     );
   }
 
-  // Error state
-  if (error || !video) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-indigo-50/30 to-purple-50/30">
-        <Header />
-        <main className="container mx-auto px-4 py-8">
-          <button
-            onClick={() => router.push('/')}
-            className="flex items-center text-gray-600 hover:text-indigo-600 transition-colors mb-6"
-          >
-            <ArrowLeft className="w-5 h-5 mr-2" />
-            Back to Home
-          </button>
-          <div className="bg-red-50 border border-red-200 rounded-xl p-8 max-w-2xl mx-auto">
-            <div className="flex items-start space-x-4">
-              <AlertCircle className="w-8 h-8 text-red-600 flex-shrink-0 mt-1" />
-              <div>
-                <h2 className="text-2xl font-bold text-red-900 mb-2">Failed to Load Video</h2>
-                <p className="text-red-700 mb-4">{error || 'Video not found'}</p>
-                <button
-                  onClick={() => router.push('/')}
-                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors"
-                >
-                  Return to Home
-                </button>
-              </div>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
+  // No content state
+  if (!hasContent) {
+    return <NoContentPanel videoId={videoId} />;
   }
 
+  // Main practice page layout
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-indigo-50/30 to-purple-50/30">
-      <Header />
+    <div className="flex h-screen bg-gray-100">
+      {/* Video player on left (60%) */}
+      <div className="w-3/5 flex flex-col p-4 gap-4">
+        <VideoPlayer
+          videoId={videoId}
+          phrases={phrases}
+          onPhraseClick={(index, startTime) => {
+            setCurrentTime(startTime);
+          }}
+          onProgressUpdate={(timestamp) => {
+            // Progress update handling can be added here if needed
+          }}
+          isPlaying={false}
+          currentTime={currentTime}
+          playbackSpeed={1}
+          volume={100}
+          isMuted={false}
+          onPlay={() => {}}
+          onPause={() => {}}
+          onTimeUpdate={setCurrentTime}
+          onDurationChange={() => {}}
+          onSeek={setCurrentTime}
+        />
+      </div>
 
-      <main className="container mx-auto px-4 py-8">
-        {/* Back Button */}
-        <button
-          onClick={() => router.push('/')}
-          className="flex items-center text-gray-600 hover:text-indigo-600 transition-colors mb-6 group"
-        >
-          <ArrowLeft className="w-5 h-5 mr-2 group-hover:-translate-x-1 transition-transform" />
-          Back to Home
-        </button>
-
-        {/* Video Info Header */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">{video.title}</h1>
-          <p className="text-gray-600">{video.channel_name}</p>
-        </div>
-
-        {/* Main Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Video Player */}
-          <div className="lg:col-span-2 space-y-4">
-            {/* Video Player */}
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-              <VideoPlayer
-                videoId={video.youtube_id}
-                phrases={phrases}
-                onPhraseClick={handlePhraseClick}
-                onProgressUpdate={handleProgressUpdate}
-                isPlaying={videoPlayerHook.isPlaying}
-                currentTime={videoPlayerHook.currentTime}
-                playbackSpeed={videoPlayerHook.playbackSpeed}
-                volume={videoPlayerHook.volume}
-                isMuted={videoPlayerHook.isMuted}
-                onPlay={videoPlayerHook.play}
-                onPause={videoPlayerHook.pause}
-                onTimeUpdate={videoPlayerHook.setCurrentTime}
-                onDurationChange={videoPlayerHook.setDuration}
-                onSeek={videoPlayerHook.seek}
-              />
-
-              {/* Player Controls */}
-              <PlayerControls
-                isPlaying={videoPlayerHook.isPlaying}
-                currentTime={videoPlayerHook.currentTime}
-                duration={videoPlayerHook.duration}
-                playbackSpeed={videoPlayerHook.playbackSpeed}
-                volume={videoPlayerHook.volume}
-                isMuted={videoPlayerHook.isMuted}
-                practiceMode={videoPlayerHook.practiceMode}
-                onPlayPause={videoPlayerHook.togglePlayPause}
-                onSpeedChange={videoPlayerHook.setPlaybackSpeed}
-                onVolumeChange={videoPlayerHook.setVolume}
-                onProgressChange={videoPlayerHook.seek}
-                onTogglePracticeMode={videoPlayerHook.togglePracticeMode}
-                onToggleFullscreen={videoPlayerHook.toggleFullscreen}
-                onToggleMute={videoPlayerHook.toggleMute}
-                onSkipBackward={() => videoPlayerHook.seek(videoPlayerHook.currentTime - 5)}
-                onSkipForward={() => videoPlayerHook.seek(videoPlayerHook.currentTime + 5)}
-              />
-            </div>
-
-            {/* Practice Mode Info (Desktop) */}
-            <div className="hidden lg:block">
-              <PracticeMode
-                practiceMode={videoPlayerHook.practiceMode}
-                onTogglePracticeMode={videoPlayerHook.togglePracticeMode}
-                practiceAttempts={videoPlayerHook.practiceAttempts}
-                totalPhrases={phrases.length}
-              />
-            </div>
-          </div>
-
-          {/* Right Column - Transcript */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-lg p-6 sticky top-8 max-h-[calc(100vh-6rem)] overflow-y-auto">
-              <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center justify-between">
-                <span>Transcript</span>
-                <span className="text-sm font-normal text-gray-500">
-                  {phrases.length} phrases
-                </span>
-              </h3>
-
-              <TranscriptViewer
-                phrases={phrases}
-                currentTime={videoPlayerHook.currentTime}
-                currentPhraseIndex={videoPlayerHook.currentPhraseIndex}
-                onPhraseClick={handlePhraseClick}
-                practiceMode={videoPlayerHook.practiceMode}
-                practiceAttempts={videoPlayerHook.practiceAttempts}
-                onRevealPhrase={videoPlayerHook.revealPhrase}
-                currentLanguage={video.language}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Practice Mode Info (Mobile) */}
-        <div className="lg:hidden mt-6">
-          <PracticeMode
-            practiceMode={videoPlayerHook.practiceMode}
-            onTogglePracticeMode={videoPlayerHook.togglePracticeMode}
-            practiceAttempts={videoPlayerHook.practiceAttempts}
-            totalPhrases={phrases.length}
-          />
-        </div>
-      </main>
+      {/* Transcript/captions on right (40%) */}
+      <div className="w-2/5 p-4 bg-gray-100">
+        <TranscriptViewer
+          phrases={phrases}
+          currentTime={currentTime}
+          source={transcriptSource}
+          isAutoGenerated={transcriptSource === "auto_captions"}
+          warning={transcriptWarning || undefined}
+          onPhraseClick={(index, startTime) => {
+            // Handle phrase click - jump video to timestamp
+            setCurrentTime(startTime);
+          }}
+          practiceMode={practiceMode}
+          onPracticeToggle={() => setPracticeMode(!practiceMode)}
+        />
+      </div>
     </div>
   );
 }
