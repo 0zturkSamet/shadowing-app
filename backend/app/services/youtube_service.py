@@ -321,3 +321,245 @@ class YouTubeService:
         except Exception as e:
             logger.error(f"Error listing transcripts for {video_id}: {e}")
             return []
+
+    def get_video_captions(self, video_id: str) -> Optional[Dict]:
+        """
+        Get manual (non-auto-generated) captions from YouTube.
+
+        Attempts to get manual captions in this order:
+        1. English captions (if available)
+        2. First available language captions
+
+        Returns:
+            Dict with:
+              - phrases: list of caption phrases with timestamps
+              - language: language code (en, es, fr, de, ja, etc)
+              - is_auto_generated: False
+              - source: "captions"
+            None: if no manual captions available
+
+        Raises:
+            Exception: if YouTube API fails (logged and returns None)
+        """
+        try:
+            logger.info(f"📺 Attempting to fetch manual captions for video: {video_id}")
+
+            # List all available transcripts
+            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+
+            # Filter for manual (non-generated) transcripts only
+            manual_transcripts = []
+            for transcript in transcript_list:
+                if not transcript.is_generated:
+                    manual_transcripts.append(transcript)
+                    logger.debug(f"Found manual caption: {transcript.language_code} ({transcript.language})")
+
+            if not manual_transcripts:
+                logger.info(f"No manual captions available for video: {video_id}")
+                return None
+
+            # Try to find English captions first
+            selected_transcript = None
+            for transcript in manual_transcripts:
+                if transcript.language_code.startswith('en'):
+                    selected_transcript = transcript
+                    logger.info(f"✅ Found English manual captions for {video_id}")
+                    break
+
+            # If no English, use first available
+            if not selected_transcript:
+                selected_transcript = manual_transcripts[0]
+                logger.info(f"✅ Using {selected_transcript.language_code} manual captions for {video_id}")
+
+            # Fetch the caption data
+            caption_data = selected_transcript.fetch()
+
+            # Convert to phrase format
+            phrases = []
+            for entry in caption_data:
+                phrase = {
+                    'text': entry['text'],
+                    'start_time': entry['start'],
+                    'duration': entry['duration']
+                }
+                phrases.append(phrase)
+
+            result = {
+                "phrases": phrases,
+                "language": selected_transcript.language_code,
+                "is_auto_generated": False,
+                "source": "captions"
+            }
+
+            logger.info(f"✅ Retrieved {len(phrases)} manual caption phrases for {video_id}")
+            return result
+
+        except TranscriptsDisabled:
+            logger.warning(f"Transcripts/captions disabled for {video_id}")
+            return None
+        except NoTranscriptFound:
+            logger.warning(f"No captions found for {video_id}")
+            return None
+        except VideoUnavailable:
+            logger.warning(f"Video unavailable: {video_id}")
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to get manual captions for {video_id}: {str(e)}")
+            logger.debug(f"Exception details: {e}", exc_info=True)
+            return None
+
+    def get_auto_generated_captions(self, video_id: str) -> Optional[Dict]:
+        """
+        Get auto-generated captions from YouTube.
+
+        Auto-generated captions are available for most videos
+        even if manual captions aren't available.
+
+        Returns:
+            Dict with:
+              - phrases: list of caption phrases with timestamps
+              - language: language code (en, es, fr, de, ja, etc)
+              - is_auto_generated: True
+              - source: "auto_captions"
+            None: if no auto-generated captions available
+        """
+        try:
+            logger.info(f"🤖 Attempting to fetch auto-generated captions for: {video_id}")
+
+            # List all available transcripts
+            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+
+            # Filter for auto-generated transcripts only
+            auto_transcripts = []
+            for transcript in transcript_list:
+                if transcript.is_generated:
+                    auto_transcripts.append(transcript)
+                    logger.debug(f"Found auto-generated caption: {transcript.language_code} ({transcript.language})")
+
+            if not auto_transcripts:
+                logger.info(f"No auto-generated captions available for video: {video_id}")
+                return None
+
+            # Try to find English auto-generated captions first
+            selected_transcript = None
+            for transcript in auto_transcripts:
+                if transcript.language_code.startswith('en'):
+                    selected_transcript = transcript
+                    logger.info(f"✅ Found English auto-generated captions for {video_id}")
+                    break
+
+            # If no English, use first available
+            if not selected_transcript:
+                selected_transcript = auto_transcripts[0]
+                logger.info(f"✅ Using {selected_transcript.language_code} auto-generated captions for {video_id}")
+
+            # Fetch the caption data
+            caption_data = selected_transcript.fetch()
+
+            # Convert to phrase format
+            phrases = []
+            for entry in caption_data:
+                phrase = {
+                    'text': entry['text'],
+                    'start_time': entry['start'],
+                    'duration': entry['duration']
+                }
+                phrases.append(phrase)
+
+            result = {
+                "phrases": phrases,
+                "language": selected_transcript.language_code,
+                "is_auto_generated": True,
+                "source": "auto_captions"
+            }
+
+            logger.info(f"✅ Retrieved {len(phrases)} auto-generated caption phrases for {video_id}")
+            return result
+
+        except TranscriptsDisabled:
+            logger.warning(f"Transcripts/captions disabled for {video_id}")
+            return None
+        except NoTranscriptFound:
+            logger.warning(f"No auto-generated captions found for {video_id}")
+            return None
+        except VideoUnavailable:
+            logger.warning(f"Video unavailable: {video_id}")
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to get auto-generated captions for {video_id}: {str(e)}")
+            logger.debug(f"Exception details: {e}", exc_info=True)
+            return None
+
+    def get_content_for_practice(self, video_id: str) -> Optional[Dict]:
+        """
+        MASTER FALLBACK METHOD - This is the core of the feature!
+
+        Intelligently tries to get content for practice in priority order:
+        1. Transcript (BEST quality) 📝
+        2. Official captions (GOOD quality) 📺
+        3. Auto-generated captions (ACCEPTABLE quality) 🤖
+        4. None (suggest recommendations) ❌
+
+        This ensures users ALMOST NEVER see "no content"!
+
+        Returns:
+            Dict with:
+              - content: the actual phrases
+              - source: which source was used
+              - quality: quality level
+              - warning: optional warning message
+            None: if absolutely nothing available
+        """
+        logger.info(f"🎯 Starting content fallback for video: {video_id}")
+
+        # LEVEL 1: TRY TRANSCRIPT (BEST)
+        logger.info(f"📝 LEVEL 1: Attempting transcript for {video_id}")
+        try:
+            transcript = self.get_transcript(video_id)
+            if transcript and transcript.get("phrases") and len(transcript["phrases"]) > 0:
+                logger.info(f"✅ SUCCESS: Transcript found for {video_id} ({len(transcript['phrases'])} phrases)")
+                return {
+                    "content": transcript,
+                    "source": "transcript",
+                    "quality": "best",
+                    "warning": None
+                }
+            logger.debug(f"Transcript empty or invalid for {video_id}")
+        except Exception as e:
+            logger.debug(f"Transcript fetch failed for {video_id}: {str(e)}")
+
+        # LEVEL 2: TRY OFFICIAL CAPTIONS (GOOD)
+        logger.info(f"📺 LEVEL 2: Attempting manual captions for {video_id}")
+        try:
+            captions = self.get_video_captions(video_id)
+            if captions and captions.get("phrases") and len(captions["phrases"]) > 0:
+                logger.info(f"✅ SUCCESS: Manual captions found for {video_id} ({len(captions['phrases'])} phrases)")
+                return {
+                    "content": captions,
+                    "source": "captions",
+                    "quality": "good",
+                    "warning": None
+                }
+            logger.debug(f"Manual captions empty or invalid for {video_id}")
+        except Exception as e:
+            logger.debug(f"Manual captions fetch failed for {video_id}: {str(e)}")
+
+        # LEVEL 3: TRY AUTO-GENERATED CAPTIONS (ACCEPTABLE)
+        logger.info(f"🤖 LEVEL 3: Attempting auto-generated captions for {video_id}")
+        try:
+            auto_captions = self.get_auto_generated_captions(video_id)
+            if auto_captions and auto_captions.get("phrases") and len(auto_captions["phrases"]) > 0:
+                logger.info(f"✅ SUCCESS: Auto-generated captions found for {video_id} ({len(auto_captions['phrases'])} phrases)")
+                return {
+                    "content": auto_captions,
+                    "source": "auto_captions",
+                    "quality": "acceptable",
+                    "warning": "Auto-generated - may contain errors but great for practice!"
+                }
+            logger.debug(f"Auto-generated captions empty or invalid for {video_id}")
+        except Exception as e:
+            logger.debug(f"Auto-generated captions fetch failed for {video_id}: {str(e)}")
+
+        # LEVEL 4: NOTHING AVAILABLE
+        logger.warning(f"❌ NO CONTENT: No transcript/captions available for {video_id}")
+        return None
