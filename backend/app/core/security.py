@@ -4,7 +4,7 @@ Security utilities for authentication and password hashing.
 This module provides functions for password hashing with bcrypt
 and JWT token generation for user authentication.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 
 from passlib.context import CryptContext
@@ -70,9 +70,9 @@ def create_access_token(
     to_encode = data.copy()
 
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(
+        expire = datetime.now(timezone.utc) + timedelta(
             minutes=settings.JWT_EXPIRATION_MINUTES
         )
 
