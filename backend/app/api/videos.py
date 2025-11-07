@@ -378,6 +378,89 @@ async def get_transcript_or_captions(
         )
 
 
+@router.get("/{video_id}/recommendations")
+async def get_video_recommendations(
+    video_id: str,
+    limit: int = Query(3, ge=1, le=10),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get similar videos that have transcripts/captions.
+
+    Used when current video has no content.
+    Helps users find alternative videos to practice with.
+    This prevents dead-end user experience!
+
+    Args:
+        video_id: YouTube video ID (e.g., 'dQw4w9WgXcQ')
+        limit: Maximum number of recommendations (1-10, default 3)
+        db: Database session
+        current_user: Authenticated user
+
+    Returns:
+        dict: Recommendations with video metadata
+
+    Raises:
+        HTTPException: If video not found (404) or fetch fails (500)
+
+    Example:
+        GET /api/videos/dQw4w9WgXcQ/recommendations?limit=5
+    """
+    try:
+        logger.info(f"Getting recommendations for video: {video_id}")
+
+        # Step 1: Get current video to find similar ones
+        video = db.query(Video).filter(Video.youtube_id == video_id).first()
+        if not video:
+            logger.warning(f"Video not found for recommendations: {video_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Video not found: {video_id}"
+            )
+
+        # Step 2: Query similar videos
+        # Criteria: same language, different video, ordered by view_count
+        recommendations = db.query(Video).filter(
+            Video.language == video.language,
+            Video.youtube_id != video_id
+        ).order_by(
+            Video.view_count.desc()  # Most popular first
+        ).limit(limit).all()
+
+        # Step 3: Format response
+        response = {
+            "video_id": video_id,
+            "count": len(recommendations),
+            "recommendations": [
+                {
+                    "id": v.youtube_id,
+                    "youtube_id": v.youtube_id,
+                    "title": v.title,
+                    "description": v.description[:200] if v.description else None,
+                    "thumbnail_url": v.thumbnail_url,
+                    "duration": v.duration,
+                    "channel_name": v.channel_name,
+                    "language": v.language,
+                    "view_count": v.view_count
+                }
+                for v in recommendations
+            ]
+        }
+
+        logger.info(f"Found {len(recommendations)} recommendations for {video_id}")
+        return response
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting recommendations for {video_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get recommendations: {str(e)}"
+        )
+
+
 @router.get("/{video_id}/player", response_model=VideoPlayerResponse)
 async def get_video_player(
     video_id: str,
