@@ -140,6 +140,7 @@ GET /api/videos/transcripts/{video_id}
 - ✅ Word-level timestamps for precise shadowing
 - ✅ Automatic language detection
 - ✅ Graceful error handling with fallbacks
+- ✅ Uses yt-dlp to bypass YouTube anti-bot protections
 
 **Example request**:
 ```bash
@@ -189,6 +190,11 @@ curl http://localhost:8000/api/videos/transcripts/dQw4w9WgXcQ
 - Assembly AI service may be experiencing issues
 - The service automatically retries 3 times with exponential backoff
 - Check https://status.assemblyai.com/ for service status
+
+**Error: "File does not appear to contain audio" or "text/html"**
+- This was an issue with YouTube's anti-bot protections
+- **Already fixed**: We now use yt-dlp to extract the audio URL first
+- If you see this error, make sure you've installed yt-dlp: `pip install yt-dlp`
 
 ### Cache Strategy
 

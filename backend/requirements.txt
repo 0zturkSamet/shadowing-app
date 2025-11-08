@@ -16,3 +16,4 @@ youtube-transcript-api==0.6.1
 assemblyai==0.25.0
 python-dotenv==1.0.0
 isodate==0.6.1
+yt-dlp==2024.8.6
