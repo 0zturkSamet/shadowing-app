@@ -407,6 +407,249 @@ async def get_transcript_or_captions(
         )
 
 
+@router.get("/{video_id}/smart-transcript", response_model=TranscriptResponse)
+async def get_smart_transcript(
+    video_id: str,
+    db: Session = Depends(get_db),
+    youtube_service: YouTubeService = Depends(get_youtube_service)
+) -> TranscriptResponse:
+    """
+    Get transcript with intelligent fallback: Assembly AI → YouTube transcript/captions.
+
+    Priority order:
+    1. Assembly AI transcription (highest quality, word-level accuracy, confidence scores)
+    2. YouTube transcript (fallback if Assembly AI fails)
+    3. YouTube captions (fallback if no transcript)
+    4. YouTube auto-captions (final fallback)
+
+    Results are cached to minimize API costs and improve response times.
+
+    Args:
+        video_id: YouTube video ID (e.g., 'dQw4w9WgXcQ')
+        db: Database session
+        youtube_service: YouTube service instance
+
+    Returns:
+        TranscriptResponse: Unified transcript with source indicator
+
+    Raises:
+        HTTPException:
+            - 400: No transcript available from any source
+            - 404: Video not found
+            - 500: Server error
+
+    Example:
+        GET /api/videos/dQw4w9WgXcQ/smart-transcript
+    """
+    start_time = time.time()
+
+    try:
+        logger.info(f"🎯 Smart transcript request for video: {video_id}")
+
+        # Get or create video record
+        video = db.query(Video).filter(Video.youtube_id == video_id).first()
+
+        if not video:
+            # Fetch video metadata first
+            logger.info(f"Video not in database, fetching metadata: {video_id}")
+            try:
+                video_metadata = youtube_service.get_video_metadata(video_id)
+                video = Video(
+                    youtube_id=video_metadata['youtube_id'],
+                    title=video_metadata['title'],
+                    description=video_metadata.get('description', ''),
+                    language=video_metadata.get('language', 'unknown'),
+                    duration=video_metadata['duration'],
+                    channel_name=video_metadata['channel_name'],
+                    thumbnail_url=video_metadata['thumbnail_url'],
+                    view_count=video_metadata['view_count']
+                )
+                db.add(video)
+                db.commit()
+                db.refresh(video)
+            except Exception as e:
+                logger.error(f"Failed to fetch video metadata: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Video not found: {video_id}"
+                )
+
+        # Check database cache first (works for both sources)
+        existing_transcript = db.query(Transcript).filter(
+            Transcript.video_id == video.id
+        ).first()
+
+        if existing_transcript:
+            logger.info(f"✅ Database cache hit for video: {video_id}")
+
+            # Build phrases
+            phrase_objects = []
+            for idx, phrase in enumerate(existing_transcript.phrases):
+                phrase_objects.append(PhraseSchema(
+                    index=idx,
+                    text=phrase['text'],
+                    start_time=phrase['start_time'],
+                    duration=phrase['duration'],
+                    language=phrase.get('language', video.language)
+                ))
+
+            # Determine source from cached data (default to assembly_ai if confidence exists)
+            has_confidence = len(existing_transcript.phrases) > 0 and 'confidence' in existing_transcript.phrases[0]
+            cached_source = "assembly_ai" if has_confidence else "transcript"
+
+            return TranscriptResponse(
+                video_id=video.id,
+                phrases=phrase_objects,
+                source=cached_source,
+                quality="best",
+                language=video.language,
+                warning=None,
+                is_auto_generated=False
+            )
+
+        # PRIORITY 1: Try Assembly AI (primary service)
+        logger.info(f"🎙️  PRIORITY 1: Attempting Assembly AI transcription for {video_id}")
+        youtube_url = f"https://www.youtube.com/watch?v={video_id}"
+
+        try:
+            assembly_result = await transcribe_youtube_video(youtube_url, use_cache=True)
+
+            if assembly_result and assembly_result.get("transcript"):
+                processing_time = int(time.time() - start_time)
+                logger.info(
+                    f"✅ Assembly AI SUCCESS for {video_id} "
+                    f"(sentences: {len(assembly_result['transcript'])}, time: {processing_time}s)"
+                )
+
+                # Convert Assembly AI format to database format
+                phrases = []
+                for sentence in assembly_result["transcript"]:
+                    phrase = {
+                        'text': sentence['text'],
+                        'start_time': sentence['start_time'],
+                        'duration': sentence['end_time'] - sentence['start_time'],
+                        'language': assembly_result.get('language', video.language),
+                        'confidence': sentence.get('confidence', 1.0)  # Include confidence for Assembly AI
+                    }
+                    phrases.append(phrase)
+
+                # Cache in database
+                new_transcript = Transcript(
+                    video_id=video.id,
+                    phrases=phrases
+                )
+                db.add(new_transcript)
+                db.commit()
+                db.refresh(new_transcript)
+
+                # Build response
+                phrase_objects = []
+                for idx, phrase in enumerate(phrases):
+                    phrase_objects.append(PhraseSchema(
+                        index=idx,
+                        text=phrase['text'],
+                        start_time=phrase['start_time'],
+                        duration=phrase['duration'],
+                        language=phrase.get('language', video.language)
+                    ))
+
+                return TranscriptResponse(
+                    video_id=video.id,
+                    phrases=phrase_objects,
+                    source="assembly_ai",
+                    quality="best",
+                    language=assembly_result.get('language', video.language),
+                    warning=None,
+                    is_auto_generated=False
+                )
+
+        except Exception as assembly_error:
+            logger.warning(
+                f"⚠️  Assembly AI failed for {video_id}: {str(assembly_error)[:100]}. "
+                f"Falling back to YouTube transcript system..."
+            )
+
+        # PRIORITY 2-4: Fallback to YouTube transcript system
+        logger.info(f"📺 FALLBACK: Attempting YouTube transcript/captions for {video_id}")
+
+        try:
+            youtube_result = youtube_service.get_content_for_practice(video_id)
+
+            if youtube_result is None:
+                # No content available from any source
+                logger.error(f"❌ No transcript available from any source for {video_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "No transcript or captions available for this video from any source. "
+                        "Assembly AI and YouTube transcript services both failed. "
+                        "Try another video with captions enabled."
+                    )
+                )
+
+            # Extract content from YouTube result
+            content_data = youtube_result.get("content", {})
+            phrases = content_data.get("phrases", [])
+            source = youtube_result.get("source", "unknown")
+            quality = youtube_result.get("quality", "unknown")
+            warning = youtube_result.get("warning")
+
+            processing_time = int(time.time() - start_time)
+            logger.info(
+                f"✅ YouTube fallback SUCCESS for {video_id} "
+                f"(source: {source}, phrases: {len(phrases)}, time: {processing_time}s)"
+            )
+
+            # Cache in database
+            new_transcript = Transcript(
+                video_id=video.id,
+                phrases=phrases
+            )
+            db.add(new_transcript)
+            db.commit()
+            db.refresh(new_transcript)
+
+            # Build response
+            phrase_objects = []
+            for idx, phrase in enumerate(phrases):
+                phrase_objects.append(PhraseSchema(
+                    index=idx,
+                    text=phrase['text'],
+                    start_time=phrase['start_time'],
+                    duration=phrase['duration'],
+                    language=content_data.get('language', video.language)
+                ))
+
+            return TranscriptResponse(
+                video_id=video.id,
+                phrases=phrase_objects,
+                source=source,
+                quality=quality,
+                language=content_data.get('language', video.language),
+                warning=warning,
+                is_auto_generated=(source == "auto_captions")
+            )
+
+        except HTTPException:
+            raise
+        except Exception as youtube_error:
+            logger.error(f"❌ YouTube fallback also failed for {video_id}: {youtube_error}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to retrieve transcript from all sources: {str(youtube_error)}"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Unexpected error in smart transcript for {video_id}: {e}")
+        logger.exception(e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
+
+
 @router.get("/transcripts/{video_id}")
 async def get_assembly_ai_transcript(
     video_id: str,
