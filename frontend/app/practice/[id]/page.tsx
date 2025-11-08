@@ -22,6 +22,25 @@ interface TranscriptResponse {
   suggestion?: string;
 }
 
+// Assembly AI response format
+interface AssemblyAIResponse {
+  video_id: string;
+  title?: string;
+  transcript: Array<{
+    sentence_id: number;
+    text: string;
+    start_time: number;
+    end_time: number;
+    confidence: number;
+  }>;
+  source: "assembly_ai";
+  cached: boolean;
+  cached_at: string;
+  processing_time: number;
+  language: string;
+  audio_duration?: number;
+}
+
 export default function PracticePage() {
   const params = useParams();
   const router = useRouter();
@@ -51,7 +70,7 @@ export default function PracticePage() {
       try {
         setLoading(true);
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/videos/${videoId}/transcript`,
+          `${process.env.NEXT_PUBLIC_API_URL}/api/videos/transcripts/${videoId}`,
           {
             headers: {
               'Authorization': `Bearer ${token}`
@@ -66,25 +85,36 @@ export default function PracticePage() {
           return;
         }
 
-        const data: TranscriptResponse = await response.json();
+        // Check if response is OK
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+          throw new Error(errorData.detail || `HTTP ${response.status}`);
+        }
 
-        if (data.status === "success" && data.phrases && data.phrases.length > 0) {
+        const data: AssemblyAIResponse = await response.json();
+
+        // Transform Assembly AI response to expected format
+        if (data.transcript && data.transcript.length > 0) {
           // Content available
           setHasContent(true);
-          setTranscriptSource(data.source || null);
-          setTranscriptWarning(data.warning || null);
-          setPhrases(data.phrases);
-        } else if (data.status === "no_content") {
-          // No content available
-          setHasContent(false);
+          setTranscriptSource("transcript"); // Assembly AI provides high-quality transcripts
+          setTranscriptWarning(null);
+
+          // Transform transcript to phrases format
+          const transformedPhrases = data.transcript.map(item => ({
+            text: item.text,
+            start_time: item.start_time,
+            duration: item.end_time - item.start_time
+          }));
+
+          setPhrases(transformedPhrases);
         } else {
-          // Error
-          setError(data.message || 'Failed to fetch content');
+          // No content available
           setHasContent(false);
         }
       } catch (err) {
         console.error('Error fetching transcript:', err);
-        setError('Failed to load practice content');
+        setError(`Failed to load practice content: ${err instanceof Error ? err.message : 'Unknown error'}`);
         setHasContent(false);
       } finally {
         setLoading(false);
