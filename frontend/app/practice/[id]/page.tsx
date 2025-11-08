@@ -7,7 +7,7 @@ import { TranscriptViewer } from '@/components/TranscriptViewer';
 import { NoContentPanel } from '@/components/NoContentPanel';
 import { useAuth } from '@/hooks/useAuth';
 
-// Fallback transcript response format (uses YouTube captions/transcripts)
+// Smart transcript response format (uses Assembly AI → YouTube fallback)
 interface TranscriptResponse {
   video_id: number;
   phrases: Array<{
@@ -17,7 +17,7 @@ interface TranscriptResponse {
     duration: number;
     language: string;
   }>;
-  source: "transcript" | "captions" | "auto_captions" | "test_seed";
+  source: "assembly_ai" | "transcript" | "captions" | "auto_captions" | "test_seed";
   quality: "best" | "good" | "acceptable";
   language: string;
   warning?: string | null;
@@ -35,7 +35,7 @@ export default function PracticePage() {
   const [error, setError] = useState<string | null>(null);
   const [hasContent, setHasContent] = useState(false);
   const [transcriptSource, setTranscriptSource] = useState<
-    "transcript" | "captions" | "auto_captions" | null
+    "assembly_ai" | "transcript" | "captions" | "auto_captions" | null
   >(null);
   const [transcriptWarning, setTranscriptWarning] = useState<string | null>(null);
   const [phrases, setPhrases] = useState<any[]>([]);
@@ -53,9 +53,9 @@ export default function PracticePage() {
       try {
         setLoading(true);
 
-        // Use the fallback endpoint that tries: transcript -> captions -> auto-captions
+        // Use the smart-transcript endpoint that tries: Assembly AI → transcript → captions → auto-captions
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/videos/${videoId}/transcript`,
+          `${process.env.NEXT_PUBLIC_API_URL}/api/videos/${videoId}/smart-transcript`,
           {
             headers: {
               'Authorization': `Bearer ${token}`
@@ -120,7 +120,11 @@ export default function PracticePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <p className="text-gray-500">Loading practice session...</p>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-700 font-medium">Loading practice session...</p>
+          <p className="text-gray-500 text-sm mt-2">Fetching AI-powered transcript</p>
+        </div>
       </div>
     );
   }
