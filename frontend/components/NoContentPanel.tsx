@@ -38,7 +38,7 @@ export function NoContentPanel({ videoId }: NoContentPanelProps) {
       try {
         setLoading(true);
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/videos/${videoId}/recommendations?limit=3`,
+          `${process.env.NEXT_PUBLIC_API_URL}/videos/${videoId}/recommendations?limit=3`,
           {
             headers: {
               'Authorization': `Bearer ${token}`

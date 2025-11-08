@@ -58,7 +58,7 @@ export default function PracticePage() {
 
         // Use the smart-transcript endpoint that tries: Assembly AI → transcript → captions → auto-captions
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/videos/${videoId}/smart-transcript`,
+          `${process.env.NEXT_PUBLIC_API_URL}/videos/${videoId}/smart-transcript`,
           {
             headers: {
               'Authorization': `Bearer ${token}`
