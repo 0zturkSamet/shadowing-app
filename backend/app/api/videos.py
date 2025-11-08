@@ -4,7 +4,9 @@ Video endpoints.
 This module handles video search and transcript retrieval from YouTube.
 """
 import logging
-from typing import Optional
+import re
+import time
+from typing import Optional, Dict, Any
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
@@ -27,6 +29,8 @@ from app.schemas import (
 )
 from app.models import Video, Transcript, User, VideoProgress, PhraseAttempt
 from app.services.youtube_service import YouTubeService
+from app.services.assembly_ai import transcribe_youtube_video, get_cached_transcript
+from app.services.cache import cache_service
 
 
 logger = logging.getLogger(__name__)
@@ -400,6 +404,211 @@ async def get_transcript_or_captions(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch transcript or captions: {str(e)}"
+        )
+
+
+@router.get("/transcripts/{video_id}")
+async def get_assembly_ai_transcript(
+    video_id: str,
+    force_refresh: bool = Query(False, description="Force refresh transcript from Assembly AI"),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Get Assembly AI transcript for a YouTube video.
+
+    This endpoint uses Assembly AI for high-quality transcription with
+    word-level timestamps and confidence scores. Results are cached for
+    30 days to minimize API costs.
+
+    Args:
+        video_id: YouTube video ID (e.g., 'dQw4w9WgXcQ')
+        force_refresh: Force refresh from Assembly AI (bypass cache)
+        db: Database session
+
+    Returns:
+        dict: Transcript data with metadata:
+            {
+                "video_id": "abc123",
+                "title": "YouTube video title",
+                "transcript": [
+                    {
+                        "sentence_id": 1,
+                        "text": "Hello world",
+                        "start_time": 0.5,
+                        "end_time": 2.3,
+                        "confidence": 0.95
+                    }
+                ],
+                "source": "assembly_ai",
+                "cached": false,
+                "cached_at": "2025-11-08T10:30:00Z",
+                "processing_time": 45,
+                "language": "en"
+            }
+
+    Raises:
+        HTTPException:
+            - 404: Video not found
+            - 422: Invalid video_id format
+            - 503: Assembly AI service unavailable
+            - 429: API quota exceeded
+
+    Example:
+        GET /api/videos/transcripts/dQw4w9WgXcQ
+        GET /api/videos/transcripts/dQw4w9WgXcQ?force_refresh=true
+    """
+    start_time = time.time()
+
+    try:
+        # Validate video_id format
+        if not video_id or len(video_id) < 10 or len(video_id) > 15:
+            logger.error(f"Invalid video_id format: {video_id}")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid video_id format. Expected 10-15 characters, got: {video_id}"
+            )
+
+        # Validate video_id contains only valid YouTube characters
+        if not re.match(r'^[A-Za-z0-9_-]+$', video_id):
+            logger.error(f"Invalid video_id characters: {video_id}")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid video_id. Must contain only alphanumeric characters, hyphens, and underscores."
+            )
+
+        logger.info(f"📺 Fetching Assembly AI transcript for video: {video_id}")
+
+        # Get video metadata from database or YouTube
+        video = db.query(Video).filter(Video.youtube_id == video_id).first()
+
+        if not video:
+            logger.info(f"Video not in database, will fetch during transcription: {video_id}")
+            # We'll let the transcription process handle the video
+            # But we need basic info for response - construct YouTube URL
+            youtube_url = f"https://www.youtube.com/watch?v={video_id}"
+            video_title = None
+        else:
+            youtube_url = f"https://www.youtube.com/watch?v={video.youtube_id}"
+            video_title = video.title
+
+        # Check cache first (unless force refresh)
+        cached_result = None
+        if not force_refresh:
+            cached_result = await get_cached_transcript(video_id)
+
+        if cached_result:
+            # Cache hit - return immediately
+            response_time = int((time.time() - start_time) * 1000)  # ms
+            logger.info(f"✅ Cache hit for {video_id} (response_time: {response_time}ms)")
+
+            # Log cache hit metrics
+            logger.info(
+                f"📊 Cache metrics - video_id: {video_id}, "
+                f"cache_hit: true, "
+                f"response_time: {response_time}ms, "
+                f"transcript_length: {len(cached_result.get('transcript', []))}"
+            )
+
+            return {
+                "video_id": video_id,
+                "title": video_title,
+                "transcript": cached_result.get("transcript", []),
+                "source": "assembly_ai",
+                "cached": True,
+                "cached_at": datetime.utcnow().isoformat() + "Z",
+                "processing_time": cached_result.get("processing_time", 0),
+                "language": cached_result.get("language", "unknown"),
+                "audio_duration": cached_result.get("audio_duration")
+            }
+
+        # Cache miss - transcribe with Assembly AI
+        logger.info(f"❌ Cache miss for {video_id}, transcribing with Assembly AI")
+
+        try:
+            # Call Assembly AI service
+            transcript_result = await transcribe_youtube_video(youtube_url, use_cache=False)
+
+            response_time = int((time.time() - start_time) * 1000)  # ms
+            transcript_length = len(transcript_result.get("transcript", []))
+
+            logger.info(f"✅ Assembly AI transcription completed for {video_id}")
+
+            # Log performance metrics
+            logger.info(
+                f"📊 Transcription metrics - video_id: {video_id}, "
+                f"cache_hit: false, "
+                f"response_time: {response_time}ms, "
+                f"transcript_length: {transcript_length}, "
+                f"processing_time: {transcript_result.get('processing_time')}s, "
+                f"language: {transcript_result.get('language')}"
+            )
+
+            # Log cache miss rate (for monitoring)
+            logger.info(f"📉 Cache miss - video_id: {video_id}")
+
+            return {
+                "video_id": video_id,
+                "title": video_title,
+                "transcript": transcript_result.get("transcript", []),
+                "source": "assembly_ai",
+                "cached": False,
+                "cached_at": datetime.utcnow().isoformat() + "Z",
+                "processing_time": transcript_result.get("processing_time", 0),
+                "language": transcript_result.get("language", "unknown"),
+                "audio_duration": transcript_result.get("audio_duration")
+            }
+
+        except Exception as e:
+            error_str = str(e).lower()
+
+            # Handle quota exceeded errors (429)
+            if "quota" in error_str or "limit" in error_str:
+                logger.error(f"❌ API quota exceeded for {video_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=(
+                        "Assembly AI API quota exceeded. "
+                        "The service has reached its monthly limit. "
+                        "Please try again later or contact support to upgrade."
+                    )
+                )
+
+            # Handle service unavailable errors (503)
+            if "timeout" in error_str or "unavailable" in error_str or "connection" in error_str:
+                logger.error(f"❌ Assembly AI service unavailable for {video_id}: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=(
+                        "Assembly AI service is currently unavailable. "
+                        "This may be due to network issues or service maintenance. "
+                        "Please try again in a few moments."
+                    )
+                )
+
+            # Handle video not found errors (404)
+            if "not found" in error_str or "unavailable" in error_str:
+                logger.error(f"❌ Video not found or unavailable: {video_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Video not found or unavailable: {video_id}"
+                )
+
+            # Generic error
+            logger.error(f"❌ Failed to transcribe video {video_id}: {e}")
+            logger.exception(e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to transcribe video: {str(e)}"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Unexpected error fetching transcript for {video_id}: {e}")
+        logger.exception(e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
         )
 
 

@@ -84,6 +84,125 @@ Environment variables (see `.env.example`):
 - `REDIS_URL` - Redis connection string
 - `JWT_SECRET` - JWT signing secret
 - `ALLOWED_ORIGINS` - CORS allowed origins
+- `ASSEMBLY_AI_API_KEY` - Assembly AI API key for transcription
+- `ASSEMBLY_AI_REQUEST_TIMEOUT` - Request timeout in seconds (default: 300)
+- `TRANSCRIPT_CACHE_TTL` - Cache TTL in seconds (default: 2592000 = 30 days)
+- `ASSEMBLY_AI_MAX_RETRIES` - Max retry attempts (default: 3)
+
+## Assembly AI Setup
+
+ShadowSpeak uses Assembly AI for high-quality video transcription with word-level timestamps and confidence scores.
+
+### Getting Your API Key
+
+1. **Sign up for Assembly AI**:
+   - Visit https://www.assemblyai.com/
+   - Create a free account
+   - Navigate to your dashboard
+
+2. **Get your API key**:
+   - Copy your API key from the dashboard
+   - The key looks like: `abc123def456...`
+
+3. **Add to your .env file**:
+   ```bash
+   ASSEMBLY_AI_API_KEY=your_actual_api_key_here
+   ```
+
+### Free Tier Limits
+
+The free tier includes:
+- **600 minutes/month** - Perfect for MVP testing!
+- Word-level timestamps
+- Confidence scores
+- Auto language detection
+- No credit card required
+
+### Cost Calculation for Production
+
+When you're ready to scale:
+- **Pay as you go**: $0.00025 per second ($0.015/min, $0.90/hour)
+- **Example costs**:
+  - 100 hours/month: ~$90
+  - 1,000 hours/month: ~$900
+  - 10,000 hours/month: ~$9,000
+
+### Using the Transcription Service
+
+The Assembly AI service is available at:
+```
+GET /api/videos/transcripts/{video_id}
+```
+
+**Features**:
+- ✅ High-quality transcription with confidence scores
+- ✅ Automatic caching (30 days) to minimize API costs
+- ✅ Word-level timestamps for precise shadowing
+- ✅ Automatic language detection
+- ✅ Graceful error handling with fallbacks
+
+**Example request**:
+```bash
+curl http://localhost:8000/api/videos/transcripts/dQw4w9WgXcQ
+```
+
+**Example response**:
+```json
+{
+  "video_id": "dQw4w9WgXcQ",
+  "title": "Never Gonna Give You Up",
+  "transcript": [
+    {
+      "sentence_id": 1,
+      "text": "We're no strangers to love.",
+      "start_time": 0.5,
+      "end_time": 2.3,
+      "confidence": 0.95
+    }
+  ],
+  "source": "assembly_ai",
+  "cached": false,
+  "processing_time": 45,
+  "language": "en"
+}
+```
+
+### Troubleshooting
+
+**Error: "API key invalid"**
+- Verify your API key is correct in `.env`
+- Make sure there are no extra spaces or quotes
+- Get a new key from https://www.assemblyai.com/dashboard
+
+**Error: "Quota exceeded"**
+- You've used all 600 free minutes this month
+- Check usage at https://www.assemblyai.com/dashboard
+- Upgrade to paid plan or wait until next month
+- Cached transcripts still work (30-day cache)
+
+**Error: "Video unavailable"**
+- The YouTube video may be private or deleted
+- Try a different video
+- Check if the video URL is correct
+
+**Error: "Network timeout"**
+- Assembly AI service may be experiencing issues
+- The service automatically retries 3 times with exponential backoff
+- Check https://status.assemblyai.com/ for service status
+
+### Cache Strategy
+
+To minimize API costs:
+- ✅ Transcripts are cached for **30 days** in Redis
+- ✅ Cache is checked before every API call
+- ✅ Use `force_refresh=true` query param to bypass cache
+- ✅ Cache keys: `transcript:{video_id}`
+
+**Clear cache for a specific video**:
+```python
+from app.services.assembly_ai import clear_transcript_cache
+clear_transcript_cache("dQw4w9WgXcQ")
+```
 
 ## Running Tests
 
