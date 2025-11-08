@@ -13,3 +13,6 @@ email-validator==2.3.0
 bcrypt==4.0.1
 google-api-python-client==2.108.0
 youtube-transcript-api==0.6.1
+assemblyai==0.25.0
+python-dotenv==1.0.0
+isodate==0.6.1

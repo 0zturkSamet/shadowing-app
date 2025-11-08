@@ -57,5 +57,45 @@ class Settings:
         ""
     )
 
+    # Assembly AI settings
+    ASSEMBLY_AI_API_KEY: str = os.getenv(
+        "ASSEMBLY_AI_API_KEY",
+        ""
+    )
+    ASSEMBLY_AI_REQUEST_TIMEOUT: int = int(os.getenv(
+        "ASSEMBLY_AI_REQUEST_TIMEOUT",
+        "300"
+    ))
+    TRANSCRIPT_CACHE_TTL: int = int(os.getenv(
+        "TRANSCRIPT_CACHE_TTL",
+        "2592000"  # 30 days in seconds
+    ))
+    ASSEMBLY_AI_MAX_RETRIES: int = int(os.getenv(
+        "ASSEMBLY_AI_MAX_RETRIES",
+        "3"
+    ))
+
+    def validate_assembly_ai_config(self) -> None:
+        """
+        Validate Assembly AI configuration on startup.
+
+        Raises:
+            ValueError: If API key is not set with setup instructions
+        """
+        if not self.ASSEMBLY_AI_API_KEY:
+            raise ValueError(
+                "\n\n"
+                "❌ Assembly AI API key is not configured!\n"
+                "\n"
+                "To use Assembly AI transcription service:\n"
+                "1. Sign up for a free account at https://www.assemblyai.com/\n"
+                "2. Get your API key from the dashboard\n"
+                "3. Add it to your .env file:\n"
+                "   ASSEMBLY_AI_API_KEY=your_api_key_here\n"
+                "\n"
+                "Free tier includes 600 minutes/month - perfect for MVP!\n"
+                "\n"
+            )
+
 
 settings = Settings()
