@@ -7,16 +7,19 @@ import { TranscriptViewer } from '@/components/TranscriptViewer';
 import { NoContentPanel } from '@/components/NoContentPanel';
 import { useAuth } from '@/hooks/useAuth';
 
+// Phrase interface
+interface Phrase {
+  index: number;
+  text: string;
+  start_time: number;
+  duration: number;
+  language: string;
+}
+
 // Smart transcript response format (uses Assembly AI → YouTube fallback)
 interface TranscriptResponse {
   video_id: number;
-  phrases: Array<{
-    index: number;
-    text: string;
-    start_time: number;
-    duration: number;
-    language: string;
-  }>;
+  phrases: Phrase[];
   source: "assembly_ai" | "transcript" | "captions" | "auto_captions" | "test_seed";
   quality: "best" | "good" | "acceptable";
   language: string;
@@ -35,10 +38,10 @@ export default function PracticePage() {
   const [error, setError] = useState<string | null>(null);
   const [hasContent, setHasContent] = useState(false);
   const [transcriptSource, setTranscriptSource] = useState<
-    "assembly_ai" | "transcript" | "captions" | "auto_captions" | null
+    "assembly_ai" | "transcript" | "captions" | "auto_captions" | "test_seed" | null
   >(null);
   const [transcriptWarning, setTranscriptWarning] = useState<string | null>(null);
-  const [phrases, setPhrases] = useState<any[]>([]);
+  const [phrases, setPhrases] = useState<Phrase[]>([]);
   const [currentTime, setCurrentTime] = useState(0);
   const [practiceMode, setPracticeMode] = useState(false);
 
