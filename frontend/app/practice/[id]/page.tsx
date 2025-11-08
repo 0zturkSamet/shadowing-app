@@ -7,38 +7,21 @@ import { TranscriptViewer } from '@/components/TranscriptViewer';
 import { NoContentPanel } from '@/components/NoContentPanel';
 import { useAuth } from '@/hooks/useAuth';
 
+// Fallback transcript response format (uses YouTube captions/transcripts)
 interface TranscriptResponse {
-  status: "success" | "no_content" | "error";
-  source?: "transcript" | "captions" | "auto_captions";
-  quality?: "best" | "good" | "acceptable";
-  phrases?: Array<{
+  video_id: number;
+  phrases: Array<{
+    index: number;
     text: string;
     start_time: number;
     duration: number;
+    language: string;
   }>;
-  warning?: string;
-  is_auto_generated?: boolean;
-  message?: string;
-  suggestion?: string;
-}
-
-// Assembly AI response format
-interface AssemblyAIResponse {
-  video_id: string;
-  title?: string;
-  transcript: Array<{
-    sentence_id: number;
-    text: string;
-    start_time: number;
-    end_time: number;
-    confidence: number;
-  }>;
-  source: "assembly_ai";
-  cached: boolean;
-  cached_at: string;
-  processing_time: number;
+  source: "transcript" | "captions" | "auto_captions" | "test_seed";
+  quality: "best" | "good" | "acceptable";
   language: string;
-  audio_duration?: number;
+  warning?: string | null;
+  is_auto_generated: boolean;
 }
 
 export default function PracticePage() {
@@ -59,7 +42,7 @@ export default function PracticePage() {
   const [currentTime, setCurrentTime] = useState(0);
   const [practiceMode, setPracticeMode] = useState(false);
 
-  // Fetch transcript/captions on mount
+  // Fetch transcript/captions on mount using intelligent fallback
   useEffect(() => {
     const fetchContent = async () => {
       if (!token) {
@@ -69,8 +52,10 @@ export default function PracticePage() {
 
       try {
         setLoading(true);
+
+        // Use the fallback endpoint that tries: transcript -> captions -> auto-captions
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/videos/transcripts/${videoId}`,
+          `${process.env.NEXT_PUBLIC_API_URL}/api/videos/${videoId}/transcript`,
           {
             headers: {
               'Authorization': `Bearer ${token}`
@@ -85,29 +70,36 @@ export default function PracticePage() {
           return;
         }
 
+        // Handle 400 - No content available
+        if (response.status === 400) {
+          setHasContent(false);
+          setError('No transcript or captions available for this video. Try another video.');
+          setLoading(false);
+          return;
+        }
+
         // Check if response is OK
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
           throw new Error(errorData.detail || `HTTP ${response.status}`);
         }
 
-        const data: AssemblyAIResponse = await response.json();
+        const data: TranscriptResponse = await response.json();
 
-        // Transform Assembly AI response to expected format
-        if (data.transcript && data.transcript.length > 0) {
-          // Content available
+        // Content available from fallback system
+        if (data.phrases && data.phrases.length > 0) {
           setHasContent(true);
-          setTranscriptSource("transcript"); // Assembly AI provides high-quality transcripts
-          setTranscriptWarning(null);
+          setTranscriptSource(data.source);
+          setTranscriptWarning(data.warning || null);
 
-          // Transform transcript to phrases format
-          const transformedPhrases = data.transcript.map(item => ({
-            text: item.text,
-            start_time: item.start_time,
-            duration: item.end_time - item.start_time
-          }));
+          // Phrases are already in the correct format
+          setPhrases(data.phrases);
 
-          setPhrases(transformedPhrases);
+          // Log what source was used
+          console.log(`✅ Loaded ${data.phrases.length} phrases from ${data.source} (quality: ${data.quality})`);
+          if (data.warning) {
+            console.log(`⚠️  ${data.warning}`);
+          }
         } else {
           // No content available
           setHasContent(false);
