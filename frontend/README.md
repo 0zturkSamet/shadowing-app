@@ -37,7 +37,7 @@ npm install
 2. Create a `.env.local` file in the root directory:
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:8000/api
+NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
 3. Run the development server:
@@ -109,8 +109,10 @@ frontend/
 The frontend connects to the FastAPI backend through the `/api` endpoint. Configure the base URL in your environment variables:
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:8000/api
+NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
+
+**Note**: Do not include `/api` in the base URL - the frontend code automatically appends the correct API paths.
 
 ## Styling
 
