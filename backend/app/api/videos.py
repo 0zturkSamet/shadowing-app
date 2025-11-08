@@ -507,70 +507,78 @@ async def get_smart_transcript(
                 is_auto_generated=False
             )
 
-        # PRIORITY 1: Try Assembly AI (primary service)
-        logger.info(f"🎙️  PRIORITY 1: Attempting Assembly AI transcription for {video_id}")
-        youtube_url = f"https://www.youtube.com/watch?v={video_id}"
+        # PRIORITY 1: Check if Assembly AI is configured and enabled
+        from app.config import settings
+        assembly_ai_enabled = bool(settings.ASSEMBLY_AI_API_KEY)
 
-        try:
-            assembly_result = await transcribe_youtube_video(youtube_url, use_cache=True)
+        if assembly_ai_enabled:
+            logger.info(f"🎙️  PRIORITY 1: Attempting Assembly AI transcription for {video_id}")
+            youtube_url = f"https://www.youtube.com/watch?v={video_id}"
 
-            if assembly_result and assembly_result.get("transcript"):
-                processing_time = int(time.time() - start_time)
-                logger.info(
-                    f"✅ Assembly AI SUCCESS for {video_id} "
-                    f"(sentences: {len(assembly_result['transcript'])}, time: {processing_time}s)"
+            try:
+                assembly_result = await transcribe_youtube_video(youtube_url, use_cache=True)
+
+                if assembly_result and assembly_result.get("transcript"):
+                    processing_time = int(time.time() - start_time)
+                    logger.info(
+                        f"✅ Assembly AI SUCCESS for {video_id} "
+                        f"(sentences: {len(assembly_result['transcript'])}, time: {processing_time}s)"
+                    )
+
+                    # Convert Assembly AI format to database format
+                    phrases = []
+                    for sentence in assembly_result["transcript"]:
+                        phrase = {
+                            'text': sentence['text'],
+                            'start_time': sentence['start_time'],
+                            'duration': sentence['end_time'] - sentence['start_time'],
+                            'language': assembly_result.get('language', video.language),
+                            'confidence': sentence.get('confidence', 1.0)  # Include confidence for Assembly AI
+                        }
+                        phrases.append(phrase)
+
+                    # Cache in database
+                    new_transcript = Transcript(
+                        video_id=video.id,
+                        phrases=phrases
+                    )
+                    db.add(new_transcript)
+                    db.commit()
+                    db.refresh(new_transcript)
+
+                    # Build response
+                    phrase_objects = []
+                    for idx, phrase in enumerate(phrases):
+                        phrase_objects.append(PhraseSchema(
+                            index=idx,
+                            text=phrase['text'],
+                            start_time=phrase['start_time'],
+                            duration=phrase['duration'],
+                            language=phrase.get('language', video.language)
+                        ))
+
+                    return TranscriptResponse(
+                        video_id=video.id,
+                        phrases=phrase_objects,
+                        source="assembly_ai",
+                        quality="best",
+                        language=assembly_result.get('language', video.language),
+                        warning=None,
+                        is_auto_generated=False
+                    )
+
+            except Exception as assembly_error:
+                logger.warning(
+                    f"⚠️  Assembly AI failed for {video_id}: {str(assembly_error)[:100]}. "
+                    f"Falling back to YouTube transcript system..."
                 )
-
-                # Convert Assembly AI format to database format
-                phrases = []
-                for sentence in assembly_result["transcript"]:
-                    phrase = {
-                        'text': sentence['text'],
-                        'start_time': sentence['start_time'],
-                        'duration': sentence['end_time'] - sentence['start_time'],
-                        'language': assembly_result.get('language', video.language),
-                        'confidence': sentence.get('confidence', 1.0)  # Include confidence for Assembly AI
-                    }
-                    phrases.append(phrase)
-
-                # Cache in database
-                new_transcript = Transcript(
-                    video_id=video.id,
-                    phrases=phrases
-                )
-                db.add(new_transcript)
-                db.commit()
-                db.refresh(new_transcript)
-
-                # Build response
-                phrase_objects = []
-                for idx, phrase in enumerate(phrases):
-                    phrase_objects.append(PhraseSchema(
-                        index=idx,
-                        text=phrase['text'],
-                        start_time=phrase['start_time'],
-                        duration=phrase['duration'],
-                        language=phrase.get('language', video.language)
-                    ))
-
-                return TranscriptResponse(
-                    video_id=video.id,
-                    phrases=phrase_objects,
-                    source="assembly_ai",
-                    quality="best",
-                    language=assembly_result.get('language', video.language),
-                    warning=None,
-                    is_auto_generated=False
-                )
-
-        except Exception as assembly_error:
-            logger.warning(
-                f"⚠️  Assembly AI failed for {video_id}: {str(assembly_error)[:100]}. "
-                f"Falling back to YouTube transcript system..."
+        else:
+            logger.info(
+                f"📺 Assembly AI NOT configured - using YouTube transcripts only (FREE, no downloads!)"
             )
 
-        # PRIORITY 2-4: Fallback to YouTube transcript system
-        logger.info(f"📺 FALLBACK: Attempting YouTube transcript/captions for {video_id}")
+        # PRIORITY 2-4: YouTube transcript system (or PRIMARY if Assembly AI not configured)
+        logger.info(f"📺 Using YouTube transcript/captions for {video_id}")
 
         try:
             youtube_result = youtube_service.get_content_for_practice(video_id)
