@@ -10,6 +10,7 @@ import time
 from typing import Dict, Optional, Any, List
 from urllib.parse import urlparse, parse_qs
 import re
+import yt_dlp
 
 import assemblyai as aai
 from assemblyai.types import TranscriptStatus
@@ -115,6 +116,65 @@ def get_transcript_cache_key(video_id: str) -> str:
         # Returns: "transcript:dQw4w9WgXcQ"
     """
     return f"transcript:{video_id}"
+
+
+async def extract_audio_url(youtube_url: str) -> str:
+    """
+    Extract direct audio stream URL from YouTube video using yt-dlp.
+
+    This bypasses YouTube's anti-bot protections by using yt-dlp to get
+    the actual audio stream URL, which can then be passed to Assembly AI.
+
+    Args:
+        youtube_url: YouTube video URL
+
+    Returns:
+        str: Direct audio stream URL
+
+    Raises:
+        Exception: If audio extraction fails
+
+    Example:
+        audio_url = await extract_audio_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    """
+    try:
+        logger.info(f"🎵 Extracting audio URL from: {youtube_url}")
+
+        # Configure yt-dlp options
+        ydl_opts = {
+            'format': 'bestaudio/best',  # Get best audio quality
+            'quiet': True,  # Suppress output
+            'no_warnings': True,
+            'extract_flat': False,
+            'skip_download': True,  # Don't download, just get URL
+            'force_generic_extractor': False,
+        }
+
+        # Extract info using yt-dlp (async to avoid blocking)
+        def _extract():
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(youtube_url, download=False)
+
+                # Get the best audio format URL
+                if 'url' in info:
+                    return info['url']
+                elif 'formats' in info:
+                    # Find best audio format
+                    audio_formats = [f for f in info['formats'] if f.get('acodec') != 'none']
+                    if audio_formats:
+                        # Sort by quality and get best
+                        best_audio = max(audio_formats, key=lambda f: f.get('abr', 0) or 0)
+                        return best_audio['url']
+
+                raise Exception("No audio stream found in video")
+
+        audio_url = await asyncio.to_thread(_extract)
+        logger.info(f"✅ Successfully extracted audio URL")
+        return audio_url
+
+    except Exception as e:
+        logger.error(f"❌ Failed to extract audio URL from {youtube_url}: {e}")
+        raise Exception(f"Failed to extract audio from YouTube: {str(e)}")
 
 
 def _group_words_into_sentences(words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -246,6 +306,11 @@ async def transcribe_youtube_video(
         logger.info(f"🎙️  Starting Assembly AI transcription for video: {video_id}")
         logger.info(f"📺 YouTube URL: {youtube_url}")
 
+        # Extract audio URL using yt-dlp to bypass YouTube anti-bot protections
+        logger.info(f"🔍 Extracting audio stream URL with yt-dlp...")
+        audio_url = await extract_audio_url(youtube_url)
+        logger.info(f"✅ Got audio stream URL")
+
         # Configure transcription settings
         config = aai.TranscriptionConfig(
             speech_model=aai.SpeechModel.best,  # Use best quality model
@@ -255,11 +320,11 @@ async def transcribe_youtube_video(
         # Create transcriber
         transcriber = aai.Transcriber(config=config)
 
-        # Submit transcription job (Assembly AI handles YouTube audio extraction)
+        # Submit transcription job using the extracted audio URL
         logger.info(f"⏳ Submitting transcription job for: {video_id}")
         transcript_job = await asyncio.to_thread(
             transcriber.transcribe,
-            youtube_url
+            audio_url  # Use the direct audio URL instead of YouTube URL
         )
 
         # Check for errors
