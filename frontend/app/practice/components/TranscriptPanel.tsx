@@ -10,6 +10,8 @@ interface TranscriptPanelProps {
   completedSentences: Set<number>;
   onSentenceClick: (sentenceIndex: number) => void;
   onMarkComplete: (sentenceId: number) => void;
+  source?: "youtube" | "web_speech" | "cache" | "none";
+  confidence?: number;
 }
 
 export function TranscriptPanel({
@@ -18,6 +20,8 @@ export function TranscriptPanel({
   completedSentences,
   onSentenceClick,
   onMarkComplete,
+  source = "none",
+  confidence,
 }: TranscriptPanelProps) {
   const currentSentenceRef = useRef<HTMLDivElement>(null);
 
@@ -35,13 +39,47 @@ export function TranscriptPanel({
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
+  // Get source badge
+  const getSourceBadge = () => {
+    if (source === "cache") {
+      return (
+        <span className="px-2 py-0.5 bg-green-600/20 text-green-400 rounded text-xs font-medium border border-green-600/30">
+          💾 Cached
+        </span>
+      );
+    }
+    if (source === "youtube") {
+      return (
+        <span className="px-2 py-0.5 bg-blue-600/20 text-blue-400 rounded text-xs font-medium border border-blue-600/30">
+          📺 YouTube
+        </span>
+      );
+    }
+    if (source === "web_speech") {
+      return (
+        <span className="px-2 py-0.5 bg-purple-600/20 text-purple-400 rounded text-xs font-medium border border-purple-600/30">
+          🎤 Live
+        </span>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className="h-full bg-gray-900 rounded-lg border border-gray-800 flex flex-col overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-800">
-        <h3 className="text-sm font-semibold text-white">Transcript</h3>
-        <p className="text-xs text-gray-400 mt-1">
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="text-sm font-semibold text-white">Transcript</h3>
+          {getSourceBadge()}
+        </div>
+        <p className="text-xs text-gray-400">
           Click segment • Auto-scroll • {sentences.length} phrases
+          {confidence !== undefined && (
+            <span className="ml-2 text-gray-500">
+              • {Math.round(confidence * 100)}% confidence
+            </span>
+          )}
         </p>
       </div>
 
