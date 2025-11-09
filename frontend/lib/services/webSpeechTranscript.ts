@@ -137,7 +137,7 @@ function parseSentences(text: string): string[] {
  */
 function createSpeechRecognition(
   config: WebSpeechConfig
-): SpeechRecognition {
+): any {
   const SpeechRecognition =
     (window as any).SpeechRecognition ||
     (window as any).webkitSpeechRecognition;
@@ -241,7 +241,7 @@ export async function transcribeVideoWithWebSpeech(
       });
     };
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
+    recognition.onresult = (event: any) => {
       if (hasError) return;
 
       resetNoSpeechTimeout();
@@ -313,7 +313,7 @@ export async function transcribeVideoWithWebSpeech(
       }
     };
 
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+    recognition.onerror = (event: any) => {
       if (hasError) return;
 
       console.error("[WebSpeech] Recognition error:", event.error);
@@ -473,7 +473,7 @@ export async function transcribeAudioWithWebSpeech(
  * Stop ongoing transcription
  * Useful for cancel functionality
  */
-export function stopTranscription(recognition: SpeechRecognition): void {
+export function stopTranscription(recognition: any): void {
   try {
     recognition.stop();
     console.log("[WebSpeech] Transcription stopped by user");
