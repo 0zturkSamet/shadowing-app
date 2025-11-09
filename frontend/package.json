@@ -16,10 +16,7 @@
     "next": "14.2.33",
     "react": "18.2.0",
     "react-dom": "18.2.0",
-    "typescript": "5.3.3",
-    "web-speech-api": "^0.0.1",
-    "youtube-transcript": "^1.2.1",
-    "youtube-transcript-api": "^0.6.0"
+    "typescript": "5.3.3"
   },
   "devDependencies": {
     "@types/node": "20.0.0",
