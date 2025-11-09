@@ -16,7 +16,7 @@ export interface TranscriptData {
   video_id: string;
   transcript: TranscriptSentence[];
   status: "completed" | "processing" | "failed";
-  source: "assembly_ai" | "youtube";
+  source: "assembly_ai" | "youtube" | "web_speech";
   cached: boolean;
   word_count?: number;
   confidence?: number;
