@@ -8,6 +8,9 @@ interface KeyboardHandlers {
   onLoop?: () => void;
   onRecord?: () => void;
   onTogglePlayPause?: () => void;
+  onRefresh?: () => void;
+  onClearCache?: () => void;
+  onShowSource?: () => void;
 }
 
 export function useKeyboardShortcuts(handlers: KeyboardHandlers) {
@@ -40,7 +43,20 @@ export function useKeyboardShortcuts(handlers: KeyboardHandlers) {
           break;
         case "KeyR":
           event.preventDefault();
-          handlers.onRecord?.();
+          // Prioritize refresh over record
+          if (handlers.onRefresh) {
+            handlers.onRefresh();
+          } else {
+            handlers.onRecord?.();
+          }
+          break;
+        case "KeyC":
+          event.preventDefault();
+          handlers.onClearCache?.();
+          break;
+        case "KeyS":
+          event.preventDefault();
+          handlers.onShowSource?.();
           break;
         default:
           break;
