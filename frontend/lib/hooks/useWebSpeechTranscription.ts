@@ -19,7 +19,7 @@ export function useWebSpeechTranscription() {
   const [startTime, setStartTime] = useState<number>(0);
   const [endTime, setEndTime] = useState<number>(0);
 
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<any>(null);
 
   /**
    * Check if browser supports Web Speech API

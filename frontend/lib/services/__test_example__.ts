@@ -16,7 +16,7 @@ async function example1() {
     console.log(`✓ Language: ${result.language}`);
     console.log(`✓ First sentence: ${result.transcript[0].text}`);
   } else {
-    console.error(`✗ Error: ${result.message}`);
+    console.error(`✗ Error: ${'message' in result ? result.message : 'Unknown error'}`);
   }
 }
 
@@ -37,8 +37,8 @@ async function example3() {
   const result = await extractYouTubeTranscript('invalid_id', 'en');
 
   if (result.status === 'error') {
-    console.log(`✗ Error code: ${result.code}`);
-    console.log(`✗ Error message: ${result.message}`);
+    console.log(`✗ Error code: ${'code' in result ? result.code : 'UNKNOWN'}`);
+    console.log(`✗ Error message: ${'message' in result ? result.message : 'Unknown error'}`);
   }
 }
 

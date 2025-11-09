@@ -18,8 +18,8 @@ export default function PracticePage() {
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
 
-  // Fetch transcript using Assembly AI
-  const { transcript, loading, error } = useTranscript(videoId);
+  // Fetch transcript with intelligent fallback (YouTube → Web Speech)
+  const { transcript, loading, error, source, progress, loadingMessage, refetch } = useTranscript(videoId);
 
   // Video synchronization
   const {
@@ -56,8 +56,16 @@ export default function PracticePage() {
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-300">Loading transcript...</p>
-          <p className="text-gray-500 text-sm mt-2">Powered by Assembly AI</p>
+          <p className="text-gray-300">{loadingMessage}</p>
+          <div className="mt-4 w-64 mx-auto">
+            <div className="bg-gray-800 rounded-full h-2 overflow-hidden">
+              <div
+                className="bg-blue-600 h-full transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              ></div>
+            </div>
+            <p className="text-gray-500 text-sm mt-2">{progress}%</p>
+          </div>
         </div>
       </div>
     );
@@ -67,17 +75,27 @@ export default function PracticePage() {
   if (error || !transcript) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center max-w-md">
           <p className="text-red-400 mb-2">Error loading transcript</p>
           <p className="text-gray-400 text-sm">
             {error?.message || "Please try again"}
           </p>
-          <button
-            onClick={() => router.back()}
-            className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition"
-          >
-            Go Back
-          </button>
+          <div className="flex gap-3 justify-center mt-4">
+            {error?.retryable && (
+              <button
+                onClick={refetch}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition"
+              >
+                Retry
+              </button>
+            )}
+            <button
+              onClick={() => router.back()}
+              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition"
+            >
+              Go Back
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -94,11 +112,14 @@ export default function PracticePage() {
             </h1>
             <p className="text-gray-400 text-sm mt-1">
               {state.currentSentenceIndex + 1} / {transcript.transcript.length}
-              {transcript.cached && (
+              {source === "cache" && (
                 <span className="ml-2 text-green-400">(Cached)</span>
               )}
-              {transcript.source === "assembly_ai" && (
-                <span className="ml-2 text-blue-400">(Assembly AI)</span>
+              {source === "youtube" && (
+                <span className="ml-2 text-blue-400">(YouTube Captions)</span>
+              )}
+              {source === "web_speech" && (
+                <span className="ml-2 text-purple-400">(Live Transcription)</span>
               )}
             </p>
           </div>
