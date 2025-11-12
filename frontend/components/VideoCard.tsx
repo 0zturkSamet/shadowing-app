@@ -65,7 +65,7 @@ export default function VideoCard({ video }: VideoCardProps) {
           <span className="text-xs text-gray-500 uppercase font-medium">
             {video.language}
           </span>
-          <Link href={`/practice/${video.id}`}>
+          <Link href={`/practice?v=${video.id}`}>
             <button className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:from-indigo-700 hover:to-purple-700 transition-all transform hover:scale-105">
               Start Practice
             </button>

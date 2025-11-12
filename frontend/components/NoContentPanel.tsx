@@ -46,10 +46,9 @@ export function NoContentPanel({ videoId }: NoContentPanelProps) {
           }
         );
 
-        // Handle 401 Unauthorized - redirect to login
+        // Handle 401 Unauthorized - let auth context handle it
         if (response.status === 401) {
-          localStorage.removeItem('auth_token');
-          router.push('/auth/login');
+          console.warn('Unauthorized request while fetching recommendations');
           return;
         }
 
@@ -70,7 +69,7 @@ export function NoContentPanel({ videoId }: NoContentPanelProps) {
   }, [videoId, token]);
 
   const handleVideoClick = (vid: Video) => {
-    router.push(`/practice/${vid.id}`);
+    router.push(`/practice?v=${vid.id}`);
   };
 
   const handleGoBack = () => {

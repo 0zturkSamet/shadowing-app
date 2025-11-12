@@ -37,7 +37,7 @@ export default function VideoGrid({ videos, isLoading, onVideoClick }: VideoGrid
 
   const handleVideoClick = (videoId: string) => {
     onVideoClick(videoId);
-    router.push(`/practice/${videoId}`);
+    router.push(`/practice?v=${videoId}`);
   };
 
   // Loading state

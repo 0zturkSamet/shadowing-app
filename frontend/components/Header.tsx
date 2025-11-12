@@ -27,12 +27,6 @@ export default function Header() {
             >
               Dashboard
             </Link>
-            <Link
-              href="/practice"
-              className="text-gray-700 hover:text-indigo-600 transition-colors font-medium"
-            >
-              Practice
-            </Link>
           </nav>
 
           {/* User Profile Icon */}
