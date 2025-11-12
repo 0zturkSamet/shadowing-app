@@ -4,13 +4,19 @@ Authentication endpoints.
 This module handles user registration, login, and profile retrieval.
 """
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+from google_auth_oauthlib.flow import Flow
+import secrets
 
 from app.core.dependencies import get_db, get_current_user
 from app.core.security import hash_password, verify_password, create_access_token
 from app.models import User
 from app.schemas import UserRegister, UserLogin, UserResponse, Token
+from app.config import settings
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -148,3 +154,147 @@ async def get_me(
         Headers: Authorization: Bearer <token>
     """
     return current_user
+
+
+@router.get("/google")
+async def google_auth():
+    """
+    Initiate Google OAuth flow.
+
+    Redirects the user to Google's OAuth consent screen.
+
+    Returns:
+        RedirectResponse: Redirect to Google OAuth consent screen
+
+    Raises:
+        HTTPException: If Google OAuth is not configured (500)
+    """
+    if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Google OAuth is not configured"
+        )
+
+    # Create OAuth flow
+    flow = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": settings.GOOGLE_CLIENT_ID,
+                "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+            }
+        },
+        scopes=[
+            "openid",
+            "https://www.googleapis.com/auth/userinfo.email",
+            "https://www.googleapis.com/auth/userinfo.profile",
+            "https://www.googleapis.com/auth/youtube.readonly"
+        ],
+        redirect_uri=settings.GOOGLE_REDIRECT_URI
+    )
+
+    # Generate authorization URL
+    authorization_url, state = flow.authorization_url(
+        access_type="offline",
+        include_granted_scopes="true",
+        prompt="consent"
+    )
+
+    return RedirectResponse(url=authorization_url)
+
+
+@router.get("/google/callback")
+async def google_callback(
+    code: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Handle Google OAuth callback.
+
+    Receives authorization code from Google, exchanges it for tokens,
+    and creates or logs in the user.
+
+    Args:
+        code: Authorization code from Google
+        db: Database session
+
+    Returns:
+        Token: JWT access token with redirect URL
+
+    Raises:
+        HTTPException: If OAuth flow fails (400)
+    """
+    try:
+        # Create OAuth flow
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": settings.GOOGLE_CLIENT_ID,
+                    "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                }
+            },
+            scopes=[
+                "openid",
+                "https://www.googleapis.com/auth/userinfo.email",
+                "https://www.googleapis.com/auth/userinfo.profile",
+                "https://www.googleapis.com/auth/youtube.readonly"
+            ],
+            redirect_uri=settings.GOOGLE_REDIRECT_URI
+        )
+
+        # Exchange authorization code for tokens
+        flow.fetch_token(code=code)
+        credentials = flow.credentials
+
+        # Verify ID token and get user info
+        id_info = id_token.verify_oauth2_token(
+            credentials.id_token,
+            google_requests.Request(),
+            settings.GOOGLE_CLIENT_ID
+        )
+
+        google_user_id = id_info["sub"]
+        email = id_info["email"]
+        name = id_info.get("name", email.split("@")[0])
+
+        # Check if user exists by Google ID or email
+        user = db.query(User).filter(
+            (User.google_id == google_user_id) | (User.email == email)
+        ).first()
+
+        if user:
+            # Update existing user with Google ID if not set
+            if not user.google_id:
+                user.google_id = google_user_id
+                db.commit()
+                db.refresh(user)
+        else:
+            # Create new user with Google OAuth
+            user = User(
+                email=email,
+                name=name,
+                google_id=google_user_id,
+                learning_language="English",  # Default, user can change later
+                password_hash=None  # OAuth users don't have passwords
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+        # Create JWT token
+        access_token = create_access_token(data={"sub": user.email})
+
+        # Redirect to frontend with token
+        frontend_url = settings.ALLOWED_ORIGINS[0] if settings.ALLOWED_ORIGINS else "http://localhost:3000"
+        redirect_url = f"{frontend_url}/auth/callback?token={access_token}"
+
+        return RedirectResponse(url=redirect_url)
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"OAuth authentication failed: {str(e)}"
+        )

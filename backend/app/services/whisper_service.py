@@ -162,6 +162,14 @@ async def download_audio(youtube_url: str) -> str:
             }],
         }
 
+        # Add cookie support to bypass YouTube bot detection
+        # Note: OAuth cookie management would be implemented here
+        # by storing user's Google OAuth credentials and generating YouTube cookies
+        cookie_file = os.getenv('YOUTUBE_COOKIE_FILE')
+        if cookie_file and os.path.exists(cookie_file):
+            ydl_opts['cookiefile'] = cookie_file
+            logger.info(f"Using YouTube cookies from: {cookie_file}")
+
         # Download audio using yt-dlp (async to avoid blocking)
         def _download():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
