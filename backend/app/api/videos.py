@@ -25,12 +25,15 @@ from app.schemas import (
     PhraseAttemptResponse,
     VideoProgressUpdateRequest,
     VideoProgressResponse,
-    UserStatsResponse
+    UserStatsResponse,
+    WhisperTranscribeRequest,
+    WhisperTranscriptResponse
 )
 from app.models import Video, Transcript, User, VideoProgress, PhraseAttempt
 from app.services.youtube_service import YouTubeService
 from app.services.assembly_ai import transcribe_youtube_video, get_cached_transcript
 from app.services.cache import cache_service
+from app.services import whisper_service
 
 
 logger = logging.getLogger(__name__)
@@ -856,6 +859,166 @@ async def get_assembly_ai_transcript(
         raise
     except Exception as e:
         logger.error(f"❌ Unexpected error fetching transcript for {video_id}: {e}")
+        logger.exception(e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
+
+
+@router.post("/transcripts/whisper", response_model=WhisperTranscriptResponse)
+async def transcribe_with_whisper(
+    request: WhisperTranscribeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> WhisperTranscriptResponse:
+    """
+    Transcribe YouTube video using OpenAI Whisper API.
+
+    This endpoint uses OpenAI Whisper for high-quality transcription.
+    Results are cached for 30 days to minimize API costs.
+    Only authenticated users can access this endpoint.
+
+    Args:
+        request: Whisper transcription request with YouTube URL
+        current_user: Authenticated user (required)
+        db: Database session
+
+    Returns:
+        WhisperTranscriptResponse: Transcript data with metadata
+
+    Raises:
+        HTTPException:
+            - 400: Invalid YouTube URL
+            - 401: Unauthorized (not authenticated)
+            - 429: API quota exceeded
+            - 503: OpenAI service unavailable
+            - 500: Internal server error
+
+    Example:
+        POST /api/videos/transcripts/whisper
+        {
+            "youtube_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            "language": "en",
+            "force_refresh": false
+        }
+    """
+    start_time = time.time()
+
+    try:
+        logger.info(
+            f"🎙️  Whisper transcription requested by user {current_user.id} "
+            f"for URL: {request.youtube_url}"
+        )
+
+        # Extract video ID for validation
+        try:
+            video_id = whisper_service.extract_video_id(request.youtube_url)
+            logger.info(f"Extracted video ID: {video_id}")
+        except ValueError as e:
+            logger.error(f"Invalid YouTube URL: {request.youtube_url}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid YouTube URL: {str(e)}"
+            )
+
+        # Check cache first (unless force refresh)
+        if not request.force_refresh:
+            cached_result = await whisper_service.get_cached_transcript(video_id)
+            if cached_result:
+                response_time = int((time.time() - start_time) * 1000)  # ms
+                logger.info(
+                    f"✅ Whisper cache hit for {video_id} "
+                    f"(response_time: {response_time}ms)"
+                )
+                return WhisperTranscriptResponse(**cached_result)
+
+        # Cache miss - transcribe with Whisper
+        logger.info(f"❌ Cache miss for {video_id}, transcribing with Whisper API")
+
+        try:
+            # Call Whisper service
+            transcript_result = await whisper_service.transcribe_youtube_video(
+                youtube_url=request.youtube_url,
+                use_cache=not request.force_refresh,
+                language=request.language
+            )
+
+            response_time = int((time.time() - start_time) * 1000)  # ms
+            transcript_length = len(transcript_result.get("transcript", []))
+
+            logger.info(f"✅ Whisper transcription completed for {video_id}")
+
+            # Log performance metrics
+            logger.info(
+                f"📊 Whisper metrics - video_id: {video_id}, "
+                f"user_id: {current_user.id}, "
+                f"cache_hit: false, "
+                f"response_time: {response_time}ms, "
+                f"transcript_length: {transcript_length}, "
+                f"processing_time: {transcript_result.get('processing_time')}s, "
+                f"language: {transcript_result.get('language')}"
+            )
+
+            return WhisperTranscriptResponse(**transcript_result)
+
+        except Exception as e:
+            error_str = str(e).lower()
+
+            # Handle quota exceeded errors (429)
+            if "quota" in error_str or "rate_limit" in error_str or "insufficient_quota" in error_str:
+                logger.error(f"❌ OpenAI API quota exceeded for {video_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=(
+                        "OpenAI API quota exceeded. "
+                        "Please check your API usage and billing, or try again later."
+                    )
+                )
+
+            # Handle authentication errors (401)
+            if "invalid_api_key" in error_str or "authentication" in error_str:
+                logger.error(f"❌ Invalid OpenAI API key")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=(
+                        "OpenAI service configuration error. "
+                        "Please contact support."
+                    )
+                )
+
+            # Handle service unavailable errors (503)
+            if "timeout" in error_str or "unavailable" in error_str or "connection" in error_str:
+                logger.error(f"❌ OpenAI Whisper service unavailable for {video_id}: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=(
+                        "OpenAI Whisper service is currently unavailable. "
+                        "This may be due to network issues or service maintenance. "
+                        "Please try again in a few moments."
+                    )
+                )
+
+            # Handle video not found errors (404)
+            if "not found" in error_str or "not available" in error_str:
+                logger.error(f"❌ Video not found or unavailable: {video_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Video not found or unavailable: {video_id}"
+                )
+
+            # Generic error
+            logger.error(f"❌ Failed to transcribe video {video_id} with Whisper: {e}")
+            logger.exception(e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to transcribe video with Whisper: {str(e)}"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Unexpected error in Whisper transcription: {e}")
         logger.exception(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -75,6 +75,12 @@ class Settings:
         "3"
     ))
 
+    # OpenAI Whisper settings
+    OPENAI_API_KEY: str = os.getenv(
+        "OPENAI_API_KEY",
+        ""
+    )
+
     def validate_assembly_ai_config(self) -> None:
         """
         Validate Assembly AI configuration on startup.
