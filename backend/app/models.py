@@ -19,9 +19,10 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
-    password_hash = Column(String(255), nullable=False)
+    password_hash = Column(String(255), nullable=True)  # Nullable for OAuth users
     name = Column(String(255), nullable=False)
     learning_language = Column(String(50), nullable=False)
+    google_id = Column(String(255), unique=True, nullable=True, index=True)  # Google OAuth ID
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
