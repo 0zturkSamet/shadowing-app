@@ -216,6 +216,88 @@ class VideoSearchResponse(BaseModel):
     }
 
 
+# Whisper API Schemas
+class WhisperTranscribeRequest(BaseModel):
+    """Schema for Whisper transcription request."""
+
+    youtube_url: str = Field(..., description="YouTube video URL")
+    language: Optional[str] = Field(None, description="Language hint for better accuracy (e.g., 'en', 'es', 'fr')")
+    force_refresh: bool = Field(False, description="Force refresh cached transcript")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "youtube_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "language": "en",
+                "force_refresh": False
+            }
+        }
+    }
+
+
+class WhisperSentence(BaseModel):
+    """Schema for a single Whisper transcript sentence."""
+
+    sentence_id: int = Field(..., description="Sentence index in transcript")
+    text: str = Field(..., description="Sentence text")
+    start_time: float = Field(..., description="Start time in seconds")
+    end_time: float = Field(..., description="End time in seconds")
+    confidence: Optional[float] = Field(None, description="Confidence score (not available from Whisper)")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "sentence_id": 1,
+                "text": "Hello, how are you?",
+                "start_time": 0.5,
+                "end_time": 2.3,
+                "confidence": None
+            }
+        }
+    }
+
+
+class WhisperTranscriptResponse(BaseModel):
+    """Schema for Whisper transcription response."""
+
+    video_id: str = Field(..., description="YouTube video ID")
+    transcript: List[WhisperSentence] = Field(..., description="List of transcript sentences")
+    status: str = Field(..., description="Processing status: 'completed'")
+    processing_time: int = Field(..., description="Processing time in seconds")
+    language: str = Field(..., description="Detected or provided language code")
+    audio_duration: Optional[float] = Field(None, description="Audio duration in seconds")
+    source: str = Field("whisper", description="Transcription source: 'whisper'")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "video_id": "dQw4w9WgXcQ",
+                "transcript": [
+                    {
+                        "sentence_id": 1,
+                        "text": "Hello, how are you?",
+                        "start_time": 0.5,
+                        "end_time": 2.3,
+                        "confidence": None
+                    },
+                    {
+                        "sentence_id": 2,
+                        "text": "I'm doing great, thanks!",
+                        "start_time": 2.8,
+                        "end_time": 4.5,
+                        "confidence": None
+                    }
+                ],
+                "status": "completed",
+                "processing_time": 45,
+                "language": "en",
+                "audio_duration": 180.5,
+                "source": "whisper"
+            }
+        }
+    }
+
+
 # Token Schemas
 class Token(BaseModel):
     """Schema for JWT token response."""
