@@ -188,8 +188,7 @@ async def google_auth():
         scopes=[
             "openid",
             "https://www.googleapis.com/auth/userinfo.email",
-            "https://www.googleapis.com/auth/userinfo.profile",
-            "https://www.googleapis.com/auth/youtube.readonly"
+            "https://www.googleapis.com/auth/userinfo.profile"
         ],
         redirect_uri=settings.GOOGLE_REDIRECT_URI
     )
@@ -239,8 +238,7 @@ async def google_callback(
             scopes=[
                 "openid",
                 "https://www.googleapis.com/auth/userinfo.email",
-                "https://www.googleapis.com/auth/userinfo.profile",
-                "https://www.googleapis.com/auth/youtube.readonly"
+                "https://www.googleapis.com/auth/userinfo.profile"
             ],
             redirect_uri=settings.GOOGLE_REDIRECT_URI
         )

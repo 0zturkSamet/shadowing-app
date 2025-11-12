@@ -1,12 +1,15 @@
-// YouTube service
-export { extractYouTubeTranscript } from './youtubeTranscript';
-export type { TranscriptResponse } from './youtubeTranscript';
-
-// Web Speech service
-export { transcribeAudioWithWebSpeech } from './webSpeechTranscript';
-
-// Orchestrator (main entry point)
-export { getTranscript } from './transcriptOrchestrator';
+// Whisper service (main transcription service)
+export {
+  getWhisperTranscript,
+  extractVideoId,
+  buildYouTubeUrl,
+  isValidVideoId
+} from './whisperService';
+export type {
+  WhisperTranscriptResponse,
+  WhisperProgress,
+  WhisperConfig
+} from './whisperService';
 
 // Cache service
 export {

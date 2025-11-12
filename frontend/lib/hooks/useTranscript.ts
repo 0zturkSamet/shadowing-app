@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  getTranscript,
-  type TranscriptResponse as OrchestratorResponse,
-  type OrchestratorProgress,
-  type TranscriptSource
-} from "@/lib/services/transcriptOrchestrator";
+  getWhisperTranscript,
+  type WhisperTranscriptResponse,
+  type WhisperProgress
+} from "@/lib/services/whisperService";
 import type { TranscriptResponse, TranscriptError } from "@/lib/types/transcript";
 
 /**
@@ -14,48 +13,48 @@ interface UseTranscriptReturn {
   transcript: TranscriptResponse | null;
   loading: boolean;
   error: TranscriptError | null;
-  source: "youtube" | "web_speech" | "cache" | "none";
+  source: "whisper" | "cache" | "none";
   progress: number; // 0-100
   loadingMessage: string;
   refetch: () => Promise<void>;
 }
 
 /**
- * Maps orchestrator source to hook source type
+ * Maps Whisper response to transcript response
  */
-function mapSource(
-  orchestratorSource: TranscriptSource,
-  cached?: boolean
-): "youtube" | "web_speech" | "cache" | "none" {
-  if (cached) return "cache";
-  if (orchestratorSource === "youtube") return "youtube";
-  if (orchestratorSource === "web_speech") return "web_speech";
-  return "none";
+function mapWhisperResponse(
+  whisperResponse: WhisperTranscriptResponse
+): TranscriptResponse {
+  return {
+    status: whisperResponse.status,
+    source: "whisper",
+    transcript: whisperResponse.transcript,
+    totalSentences: whisperResponse.totalSentences,
+    confidence: whisperResponse.confidence,
+    language: whisperResponse.language,
+    message: whisperResponse.message,
+    processingTime: whisperResponse.processingTime,
+    cached: false
+  };
 }
 
 /**
- * Maps orchestrator error to TranscriptError
+ * Maps Whisper error to TranscriptError
  */
-function mapError(
-  orchestratorResponse: OrchestratorResponse
-): TranscriptError | null {
-  if (orchestratorResponse.status !== "error") return null;
-
-  const message = orchestratorResponse.message;
+function mapError(message: string): TranscriptError {
   let errorType: TranscriptError["type"] = "network_error";
   let retryable = true;
 
-  // Determine error type from message
-  if (message.includes("not found") || message.includes("Invalid video ID")) {
+  if (message.includes("not found") || message.includes("Invalid")) {
     errorType = "invalid_video";
     retryable = false;
-  } else if (message.includes("No captions available")) {
-    errorType = "no_captions";
+  } else if (message.includes("logged in") || message.includes("401")) {
+    errorType = "network_error";
     retryable = false;
-  } else if (message.includes("not supported")) {
-    errorType = "browser_unsupported";
+  } else if (message.includes("quota") || message.includes("429")) {
+    errorType = "network_error";
     retryable = false;
-  } else if (message.includes("Network error") || message.includes("connection")) {
+  } else if (message.includes("unavailable") || message.includes("503")) {
     errorType = "network_error";
     retryable = true;
   }
@@ -63,69 +62,17 @@ function mapError(
   return {
     type: errorType,
     message,
-    source: orchestratorResponse.source,
+    source: "whisper",
     retryable
   };
 }
 
 /**
- * Gets user-friendly loading message from orchestrator progress
- */
-function getLoadingMessage(progress: OrchestratorProgress): string {
-  const { stage, message, currentAttempt, maxAttempts } = progress;
-
-  switch (stage) {
-    case "cache_check":
-      return "Checking cache...";
-    case "youtube_fetch":
-      if (currentAttempt && maxAttempts && currentAttempt > 1) {
-        return `Retrying... (${currentAttempt}/${maxAttempts})`;
-      }
-      return "Loading transcript from YouTube...";
-    case "web_speech_extract":
-      // Use the detailed message from Web Speech (e.g., "Extracting live transcript... (3/45 sentences)")
-      return message || "Extracting live transcript...";
-    case "processing":
-      return "Saving to cache...";
-    case "completed":
-      return "Ready!";
-    case "error":
-      return message || "Error loading transcript";
-    default:
-      return message || "Loading...";
-  }
-}
-
-/**
- * React hook for fetching and managing video transcripts
- *
- * Features:
- * - Automatic cache checking (instant load if cached)
- * - Intelligent fallback: YouTube → Web Speech API
- * - Real-time progress tracking with user-friendly messages
- * - Comprehensive error handling
- * - Refetch capability
+ * React hook for fetching and managing video transcripts using Whisper
  *
  * @param videoId - YouTube video ID
  * @param language - Language code (default: 'en')
  * @returns Transcript data, loading state, error, source, progress, and refetch function
- *
- * @example
- * ```typescript
- * const { transcript, loading, error, source, progress, loadingMessage, refetch } = useTranscript('dQw4w9WgXcQ', 'en');
- *
- * if (loading) {
- *   return <div>{loadingMessage} ({progress}%)</div>;
- * }
- *
- * if (error) {
- *   return <div>{error.message} {error.retryable && <button onClick={refetch}>Retry</button>}</div>;
- * }
- *
- * if (transcript) {
- *   return <div>Got {transcript.totalSentences} sentences from {source}</div>;
- * }
- * ```
  */
 export function useTranscript(
   videoId: string,
@@ -134,51 +81,39 @@ export function useTranscript(
   const [transcript, setTranscript] = useState<TranscriptResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<TranscriptError | null>(null);
-  const [source, setSource] = useState<"youtube" | "web_speech" | "cache" | "none">("none");
+  const [source, setSource] = useState<"whisper" | "cache" | "none">("none");
   const [progress, setProgress] = useState(0);
   const [loadingMessage, setLoadingMessage] = useState("Initializing...");
 
-  // Track if component is mounted to prevent state updates after unmount
   const isMountedRef = useRef(true);
-
-  // Track current fetch to allow cancellation/replacement
   const currentFetchRef = useRef<number>(0);
 
   /**
-   * Load transcript with orchestrator
+   * Load transcript with Whisper
    */
   const loadTranscript = useCallback(async () => {
-    // Increment fetch ID to track this specific fetch
     const fetchId = ++currentFetchRef.current;
 
     try {
-      // Reset state
       setLoading(true);
       setError(null);
       setProgress(0);
       setLoadingMessage("Initializing...");
 
-      console.log(`[useTranscript] Starting fetch for ${videoId} (${language})`);
+      console.log(`[useTranscript] Starting Whisper transcription for ${videoId} (${language})`);
 
-      // Fetch transcript with progress tracking
-      const result = await getTranscript(videoId, {
+      const result = await getWhisperTranscript(videoId, {
         language,
         forceRefresh: false,
-        onProgress: (orchestratorProgress: OrchestratorProgress) => {
-          // Only update if this is still the current fetch and component is mounted
+        onProgress: (whisperProgress: WhisperProgress) => {
           if (fetchId === currentFetchRef.current && isMountedRef.current) {
-            const message = getLoadingMessage(orchestratorProgress);
-            const percentage = Math.round(orchestratorProgress.percentage);
-
-            setProgress(percentage);
-            setLoadingMessage(message);
-
-            console.log(`[useTranscript] Progress: ${percentage}% - ${message}`);
+            setProgress(Math.round(whisperProgress.percentage));
+            setLoadingMessage(whisperProgress.message);
+            console.log(`[useTranscript] Progress: ${whisperProgress.percentage}% - ${whisperProgress.message}`);
           }
         }
       });
 
-      // Only update state if this is still the current fetch and component is mounted
       if (fetchId !== currentFetchRef.current || !isMountedRef.current) {
         console.log(`[useTranscript] Fetch ${fetchId} cancelled or component unmounted`);
         return;
@@ -186,52 +121,30 @@ export function useTranscript(
 
       console.log(`[useTranscript] Fetch complete:`, result);
 
-      // Map orchestrator response to hook response
       if (result.status === "success") {
-        const mappedSource = mapSource(result.source, result.cached);
-        const transcriptResponse: TranscriptResponse = {
-          status: "success",
-          source: mappedSource,
-          transcript: result.transcript,
-          totalSentences: result.totalSentences,
-          confidence: result.confidence,
-          language: result.language,
-          message: result.message,
-          processingTime: result.processingTime,
-          cached: result.cached || false
-        };
-
+        const transcriptResponse = mapWhisperResponse(result);
         setTranscript(transcriptResponse);
-        setSource(mappedSource);
+        setSource("whisper");
         setError(null);
         setProgress(100);
         setLoadingMessage("Ready!");
       } else {
-        // Handle error
-        const mappedError = mapError(result);
-        const mappedSource = mapSource(result.source, false);
-
+        const mappedError = mapError(result.message);
         setTranscript(null);
-        setSource(mappedSource);
+        setSource("none");
         setError(mappedError);
         setProgress(100);
-        setLoadingMessage(mappedError?.message || "Error loading transcript");
+        setLoadingMessage(result.message);
       }
     } catch (err) {
-      // Only update if this is still the current fetch and component is mounted
       if (fetchId !== currentFetchRef.current || !isMountedRef.current) {
         return;
       }
 
       console.error(`[useTranscript] Unexpected error:`, err);
 
-      // Handle unexpected errors
       const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred";
-      const transcriptError: TranscriptError = {
-        type: "network_error",
-        message: errorMessage,
-        retryable: true
-      };
+      const transcriptError = mapError(errorMessage);
 
       setTranscript(null);
       setSource("none");
@@ -239,7 +152,6 @@ export function useTranscript(
       setProgress(100);
       setLoadingMessage(errorMessage);
     } finally {
-      // Only update loading state if this is still the current fetch and component is mounted
       if (fetchId === currentFetchRef.current && isMountedRef.current) {
         setLoading(false);
       }
@@ -247,7 +159,7 @@ export function useTranscript(
   }, [videoId, language]);
 
   /**
-   * Refetch transcript (e.g., for retry button)
+   * Refetch transcript
    */
   const refetch = useCallback(async () => {
     console.log(`[useTranscript] Manual refetch requested`);
