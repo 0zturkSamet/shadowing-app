@@ -101,3 +101,7 @@ out/
 # Project specific
 *.db
 .env
+
+# YouTube cookies (contains sensitive auth data)
+*cookies.txt
+backend/youtube.com_cookies.txt

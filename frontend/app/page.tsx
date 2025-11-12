@@ -77,7 +77,7 @@ export default function Home() {
 
     setIsProcessing(true);
     // Navigate to practice page with the video ID
-    router.push(`/practice/${videoId}`);
+    router.push(`/practice?v=${videoId}`);
   };
 
   const handleLogout = async () => {
