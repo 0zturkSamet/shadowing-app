@@ -23,7 +23,7 @@ export default function AuthCallbackPage() {
 
     if (token) {
       // Store the token
-      localStorage.setItem('token', token);
+      localStorage.setItem('auth_token', token);
 
       // Redirect to dashboard or home
       router.push('/dashboard');
