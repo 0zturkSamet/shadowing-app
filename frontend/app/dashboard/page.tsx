@@ -138,7 +138,7 @@ export default function DashboardPage() {
                     className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                   >
                     <div className="flex-1">
-                      <Link href={`/practice/${video.id}`}>
+                      <Link href={`/practice?v=${video.id}`}>
                         <h3 className="font-semibold text-gray-900 hover:text-indigo-600 transition-colors">
                           {video.title}
                         </h3>
