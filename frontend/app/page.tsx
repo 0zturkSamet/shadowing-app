@@ -1,15 +1,11 @@
 'use client';
 
 import Header from '@/components/Header';
-import VideoSearchBar from '@/components/VideoSearchBar';
-import VideoGrid from '@/components/VideoGrid';
 import StatCard from '@/components/StatCard';
-import { Target, Trophy, Flame, LogOut, User } from 'lucide-react';
+import { Target, Trophy, Flame, LogOut, User, Link as LinkIcon } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-import { VideoResponse } from '@/types/video';
-import { searchVideos as searchVideosApi } from '@/services/videoApi';
 
 // Mock data for demonstration
 const mockStats = {
@@ -21,11 +17,9 @@ const mockStats = {
 export default function Home() {
   const { user, logout, loading } = useAuth();
   const router = useRouter();
-  const [videos, setVideos] = useState<VideoResponse[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [url, setUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [hasSearched, setHasSearched] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -34,52 +28,56 @@ export default function Home() {
     }
   }, [user, loading, router]);
 
-  // Restore search state from sessionStorage on mount
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedState = sessionStorage.getItem('search_state');
-      if (savedState) {
-        try {
-          const { videos: savedVideos, query, hasSearched: searched } = JSON.parse(savedState);
-          setVideos(savedVideos || []);
-          setSearchQuery(query || '');
-          setHasSearched(searched || false);
-        } catch (err) {
-          console.error('Error restoring search state:', err);
-        }
-      }
-    }
-  }, []);
-
-  const handleSearch = async (query: string, language: string) => {
-    setIsLoading(true);
-    setError(null);
-    setHasSearched(true);
-    setSearchQuery(query);
-
+  // Extract video ID from various YouTube URL formats
+  const extractVideoId = (url: string): string | null => {
     try {
-      const response = await searchVideosApi(query, language);
-      setVideos(response.videos);
+      const urlObj = new URL(url);
 
-      // Save search state to sessionStorage
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('search_state', JSON.stringify({
-          videos: response.videos,
-          query,
-          hasSearched: true
-        }));
+      // Handle youtube.com/watch?v=VIDEO_ID
+      if (urlObj.hostname.includes('youtube.com') && urlObj.pathname === '/watch') {
+        return urlObj.searchParams.get('v');
       }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to search videos';
-      setError(errorMessage);
-      setVideos([]);
-    } finally {
-      setIsLoading(false);
+
+      // Handle youtu.be/VIDEO_ID
+      if (urlObj.hostname === 'youtu.be') {
+        return urlObj.pathname.slice(1);
+      }
+
+      // Handle youtube.com/embed/VIDEO_ID
+      if (urlObj.hostname.includes('youtube.com') && urlObj.pathname.startsWith('/embed/')) {
+        return urlObj.pathname.split('/')[2];
+      }
+
+      // Handle youtube.com/v/VIDEO_ID
+      if (urlObj.hostname.includes('youtube.com') && urlObj.pathname.startsWith('/v/')) {
+        return urlObj.pathname.split('/')[2];
+      }
+
+      return null;
+    } catch {
+      return null;
     }
   };
 
-  const handleVideoClick = (videoId: string) => {
-    // Video click is handled by VideoGrid component
+  const handleUrlSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!url.trim()) {
+      setError('Please enter a YouTube URL');
+      return;
+    }
+
+    const videoId = extractVideoId(url.trim());
+
+    if (!videoId) {
+      setError('Invalid YouTube URL. Please enter a valid YouTube video URL.');
+      return;
+    }
+
+    setIsProcessing(true);
+    // Navigate to practice page with the video ID
+    router.push(`/practice/${videoId}`);
   };
 
   const handleLogout = async () => {
@@ -139,7 +137,7 @@ export default function Home() {
             Master Languages Through Shadowing
           </h2>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Learn to speak like a native by shadowing real conversations and improving your pronunciation
+            Paste any YouTube video URL and practice speaking like a native by shadowing real conversations
           </p>
         </section>
 
@@ -167,44 +165,68 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Search Section */}
+        {/* URL Paste Section */}
         <section className="mb-12 bg-white rounded-xl shadow-lg p-8">
-          <h3 className="text-2xl font-bold mb-6 text-gray-900">
-            Find Your Perfect Practice Video
-          </h3>
-          <VideoSearchBar
-            onSearch={handleSearch}
-            isLoading={isLoading}
-            resultCount={videos.length}
-            error={error}
-          />
-        </section>
+          <div className="flex items-center mb-6">
+            <LinkIcon className="w-6 h-6 text-indigo-600 mr-3" />
+            <h3 className="text-2xl font-bold text-gray-900">
+              Start Practicing with Any YouTube Video
+            </h3>
+          </div>
 
-        {/* Videos Section */}
-        <section>
-          <h3 className="text-2xl font-bold mb-6 text-gray-900">
-            {hasSearched ? `Search Results${searchQuery ? ` for "${searchQuery}"` : ''}` : 'YouTube Videos'}
-          </h3>
-
-          {!hasSearched ? (
-            <div className="text-center py-16 bg-white rounded-xl shadow">
-              <div className="max-w-md mx-auto">
-                <div className="w-24 h-24 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Target className="w-12 h-12 text-indigo-600" />
-                </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">Search for Videos</h3>
-                <p className="text-gray-600">
-                  Use the search bar above to find YouTube videos to practice with.
-                </p>
-              </div>
+          <form onSubmit={handleUrlSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="youtube-url" className="block text-sm font-medium text-gray-700 mb-2">
+                YouTube Video URL
+              </label>
+              <input
+                id="youtube-url"
+                type="text"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://www.youtube.com/watch?v=..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all duration-200"
+                disabled={isProcessing}
+              />
+              <p className="mt-2 text-sm text-gray-500">
+                Paste any YouTube video URL to start practicing
+              </p>
             </div>
-          ) : (
-            <VideoGrid
-              videos={videos}
-              isLoading={isLoading}
-              onVideoClick={handleVideoClick}
-            />
-          )}
+
+            {error && (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm text-red-600">{error}</p>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isProcessing || !url.trim()}
+              className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            >
+              {isProcessing ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <span>Loading...</span>
+                </>
+              ) : (
+                <>
+                  <Target className="w-5 h-5" />
+                  <span>Start Practice</span>
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Example URLs */}
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+            <p className="text-sm font-medium text-gray-700 mb-2">Supported URL formats:</p>
+            <ul className="text-sm text-gray-600 space-y-1">
+              <li>• https://www.youtube.com/watch?v=VIDEO_ID</li>
+              <li>• https://youtu.be/VIDEO_ID</li>
+              <li>• https://www.youtube.com/embed/VIDEO_ID</li>
+            </ul>
+          </div>
         </section>
       </main>
 
