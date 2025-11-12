@@ -1,29 +1,51 @@
 """
 Database connection and session management.
 
-This module sets up the PostgreSQL database connection using SQLAlchemy
-and provides a dependency for getting database sessions in endpoints.
+This module sets up the database connection using SQLAlchemy and
+provides session helpers. When the configured database is unavailable
+the module falls back to a local SQLite database so that tests and
+local development can continue to run.
 """
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from __future__ import annotations
+
+import logging
 from typing import Generator
+
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings
 
 
-# Create SQLAlchemy engine
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_pre_ping=True,  # Enable connection health checks
-    echo=settings.DEBUG  # Log SQL queries in debug mode
-)
+logger = logging.getLogger(__name__)
 
-# Create session factory
+
+def _create_engine(database_url: str):
+    """Create an SQLAlchemy engine with sensible defaults."""
+    connect_args = {}
+    if database_url.startswith("sqlite"):
+        connect_args = {"check_same_thread": False}
+
+    return create_engine(
+        database_url,
+        pool_pre_ping=True,
+        echo=settings.DEBUG,
+        connect_args=connect_args,
+    )
+
+
+PRIMARY_DATABASE_URL = settings.DATABASE_URL
+FALLBACK_DATABASE_URL = "sqlite:///./shadowing_local.db"
+
+# Global engine/session references. These may be reconfigured if we need to
+# fall back to SQLite.
+engine = _create_engine(PRIMARY_DATABASE_URL)
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
-    bind=engine
+    bind=engine,
 )
 
 # Base class for all models
@@ -42,6 +64,7 @@ def get_db() -> Generator[Session, None, None]:
         def get_users(db: Session = Depends(get_db)):
             return db.query(User).all()
     """
+    _ensure_engine()
     db = SessionLocal()
     try:
         yield db
@@ -53,6 +76,30 @@ def init_db() -> None:
     """
     Initialize database by creating all tables.
 
-    This should be called on application startup.
+    If the primary database cannot be reached, fall back to SQLite.
     """
+    _ensure_engine()
     Base.metadata.create_all(bind=engine)
+
+
+def _ensure_engine() -> None:
+    """
+    Ensure the current engine is usable; otherwise switch to the fallback.
+    """
+    global engine, SessionLocal
+
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except OperationalError as exc:
+        if str(engine.url) == FALLBACK_DATABASE_URL:
+            # Already using fallback, re-raise the exception.
+            raise
+
+        logger.warning(
+            "Failed to connect to primary database (%s). Falling back to SQLite at %s",
+            exc,
+            FALLBACK_DATABASE_URL,
+        )
+        engine = _create_engine(FALLBACK_DATABASE_URL)
+        SessionLocal.configure(bind=engine)

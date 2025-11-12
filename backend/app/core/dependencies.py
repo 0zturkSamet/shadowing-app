@@ -10,7 +10,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from jose import JWTError
 
-from app.core.database import SessionLocal
+from app.core.database import get_db as _core_get_db
 from app.core.security import decode_access_token
 from app.models import User
 
@@ -21,21 +21,10 @@ security = HTTPBearer()
 
 def get_db() -> Generator[Session, None, None]:
     """
-    Dependency for getting database sessions.
-
-    Yields:
-        Session: SQLAlchemy database session
-
-    Example:
-        @app.get("/users")
-        def get_users(db: Session = Depends(get_db)):
-            return db.query(User).all()
+    Proxy to the shared database dependency so the API layer can import
+    everything from a single module.
     """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    yield from _core_get_db()
 
 
 async def get_current_user(

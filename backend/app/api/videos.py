@@ -173,6 +173,11 @@ async def search_videos(
 
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
     except Exception as e:
         logger.error(f"Error searching videos: {e}", exc_info=True)
         raise HTTPException(
@@ -241,6 +246,11 @@ async def get_video(
 
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
     except Exception as e:
         logger.error(f"Error fetching video {video_id}: {e}", exc_info=True)
         raise HTTPException(

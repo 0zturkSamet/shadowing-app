@@ -36,8 +36,6 @@ def override_get_db():
         db.close()
 
 
-app.dependency_overrides[get_db] = override_get_db
-
 client = TestClient(app)
 
 
@@ -64,6 +62,14 @@ def test_user():
     db.refresh(user)
     db.close()
     return user
+
+
+@pytest.fixture(scope="module", autouse=True)
+def override_dependencies():
+    """Override dependencies for this module only."""
+    app.dependency_overrides[get_db] = override_get_db
+    yield
+    app.dependency_overrides.pop(get_db, None)
 
 
 def test_register_new_user():

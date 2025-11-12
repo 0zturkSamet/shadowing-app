@@ -124,6 +124,12 @@ app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(videos.router)
 
+# Ensure tables exist even when lifespan isn't triggered (e.g., during tests)
+try:
+    init_db()
+except Exception as exc:  # pragma: no cover
+    logger.warning("Deferred database initialization failed: %s", exc)
+
 
 @app.get("/", tags=["Root"])
 async def root():
