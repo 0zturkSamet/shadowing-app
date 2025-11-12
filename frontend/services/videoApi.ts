@@ -101,7 +101,7 @@ export const transcribeWithWhisper = async (
   forceRefresh?: boolean
 ): Promise<any> => {
   try {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('auth_token');
     const response = await api.post(
       '/videos/transcripts/whisper',
       {
