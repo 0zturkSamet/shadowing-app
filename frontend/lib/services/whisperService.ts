@@ -117,7 +117,7 @@ export async function getWhisperTranscript(
       sentence_id: index + 1,
       text: phrase.text,
       start_time: phrase.start_time,
-      end_time: phrase.start_time + phrase.duration,
+      end_time: phrase.end_time || (phrase.start_time + (phrase.duration || 0)),
       confidence: 0.95, // Whisper has high confidence
       source: 'whisper'
     }));
