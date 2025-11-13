@@ -84,14 +84,64 @@ Environment variables (see `.env.example`):
 - `REDIS_URL` - Redis connection string
 - `JWT_SECRET` - JWT signing secret
 - `ALLOWED_ORIGINS` - CORS allowed origins
+- `OPENAI_API_KEY` - OpenAI API key for Whisper transcription
 - `ASSEMBLY_AI_API_KEY` - Assembly AI API key for transcription
 - `ASSEMBLY_AI_REQUEST_TIMEOUT` - Request timeout in seconds (default: 300)
 - `TRANSCRIPT_CACHE_TTL` - Cache TTL in seconds (default: 2592000 = 30 days)
 - `ASSEMBLY_AI_MAX_RETRIES` - Max retry attempts (default: 3)
+- `YOUTUBE_COOKIE_FILE` - (Optional) Path to YouTube cookies.txt for bot detection bypass
+
+## Transcription Services
+
+ShadowSpeak supports multiple transcription services for high-quality video transcription with word-level timestamps.
+
+### OpenAI Whisper API
+
+The preferred transcription service using OpenAI's Whisper model.
+
+**Configuration**:
+```bash
+OPENAI_API_KEY=your_openai_api_key_here
+```
+
+**Endpoint**:
+```
+POST /api/videos/transcripts/whisper
+```
+
+**YouTube Bot Detection Bypass**:
+
+YouTube may block automated downloads with "Sign in to confirm you're not a bot" errors. The application includes several bypass mechanisms:
+
+1. **Automatic bypass** (default):
+   - Uses latest yt-dlp version with bot detection countermeasures
+   - Mimics real browser behavior with proper headers
+   - Uses multiple player clients (Android, Web)
+
+2. **Cookie-based authentication** (optional, for persistent issues):
+
+   If automatic bypass fails, you can use browser cookies:
+
+   a. Export cookies from your browser using a browser extension:
+      - Chrome/Edge: "Get cookies.txt LOCALLY" extension
+      - Firefox: "cookies.txt" extension
+
+   b. Save the cookies.txt file to your server
+
+   c. Set the environment variable:
+   ```bash
+   YOUTUBE_COOKIE_FILE=/path/to/cookies.txt
+   ```
+
+**Features**:
+- High-quality transcription with Whisper AI
+- Automatic caching (30 days)
+- Language detection and hints
+- Robust YouTube download with bot detection bypass
 
 ## Assembly AI Setup
 
-ShadowSpeak uses Assembly AI for high-quality video transcription with word-level timestamps and confidence scores.
+ShadowSpeak also supports Assembly AI for high-quality video transcription with word-level timestamps and confidence scores.
 
 ### Getting Your API Key
 

@@ -149,7 +149,7 @@ async def download_audio(youtube_url: str) -> str:
         temp_dir = tempfile.gettempdir()
         temp_audio_path = os.path.join(temp_dir, f"whisper_audio_{int(time.time())}.m4a")
 
-        # Configure yt-dlp options
+        # Configure yt-dlp options with bot detection bypass
         ydl_opts = {
             'format': 'bestaudio/best',  # Get best audio quality
             'outtmpl': temp_audio_path.replace('.m4a', ''),  # Output template without extension
@@ -160,11 +160,25 @@ async def download_audio(youtube_url: str) -> str:
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'm4a',  # m4a is compatible with Whisper
             }],
+            # Bot detection bypass settings
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'web'],  # Try multiple clients
+                    'player_skip': ['webpage', 'configs'],  # Skip some checks
+                }
+            },
+            # Additional headers to avoid detection
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-us,en;q=0.5',
+                'Sec-Fetch-Mode': 'navigate',
+            },
         }
 
         # Add cookie support to bypass YouTube bot detection
-        # Note: OAuth cookie management would be implemented here
-        # by storing user's Google OAuth credentials and generating YouTube cookies
+        # Users can export cookies from their browser if needed
         cookie_file = os.getenv('YOUTUBE_COOKIE_FILE')
         if cookie_file and os.path.exists(cookie_file):
             ydl_opts['cookiefile'] = cookie_file
