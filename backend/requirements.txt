@@ -16,7 +16,7 @@ youtube-transcript-api==0.6.1
 assemblyai==0.25.0
 python-dotenv==1.0.0
 isodate==0.6.1
-yt-dlp==2024.12.23
+yt-dlp>=2024.12.23
 openai==1.54.5
 google-auth==2.27.0
 google-auth-oauthlib==1.2.0

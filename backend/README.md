@@ -89,6 +89,7 @@ Environment variables (see `.env.example`):
 - `ASSEMBLY_AI_REQUEST_TIMEOUT` - Request timeout in seconds (default: 300)
 - `TRANSCRIPT_CACHE_TTL` - Cache TTL in seconds (default: 2592000 = 30 days)
 - `ASSEMBLY_AI_MAX_RETRIES` - Max retry attempts (default: 3)
+- `YOUTUBE_COOKIE_BROWSER` - (Optional) Browser to extract cookies from (chrome, firefox, edge, safari)
 - `YOUTUBE_COOKIE_FILE` - (Optional) Path to YouTube cookies.txt for bot detection bypass
 
 ## Transcription Services
@@ -111,27 +112,32 @@ POST /api/videos/transcripts/whisper
 
 **YouTube Bot Detection Bypass**:
 
-YouTube may block automated downloads with "Sign in to confirm you're not a bot" errors. The application includes several bypass mechanisms:
+YouTube may block automated downloads with "Broken Pipe" or "Sign in to confirm you're not a bot" errors. The application includes robust bypass mechanisms with multiple fallback strategies:
 
-1. **Automatic bypass** (default):
-   - Uses latest yt-dlp version with bot detection countermeasures
-   - Mimics real browser behavior with proper headers
-   - Uses multiple player clients (Android, Web)
+1. **Enhanced automatic bypass** (default):
+   - Uses latest yt-dlp version with advanced bot detection countermeasures
+   - Tries multiple player clients (iOS, Android, TV, Web) with fallback
+   - Implements retry logic with exponential backoff (2s, 4s, 8s)
+   - Mimics real mobile browser behavior with proper headers
 
-2. **Cookie-based authentication** (optional, for persistent issues):
+2. **Cookie-based authentication** (recommended for persistent issues):
 
-   If automatic bypass fails, you can use browser cookies:
-
-   a. Export cookies from your browser using a browser extension:
-      - Chrome/Edge: "Get cookies.txt LOCALLY" extension
-      - Firefox: "cookies.txt" extension
-
-   b. Save the cookies.txt file to your server
-
-   c. Set the environment variable:
+   **Method 1: Browser Cookies (Easiest)**
    ```bash
-   YOUTUBE_COOKIE_FILE=/path/to/cookies.txt
+   # Set in .env or environment
+   YOUTUBE_COOKIE_BROWSER=chrome  # or firefox, edge, safari
    ```
+   - Automatically extracts fresh cookies from your browser
+   - No manual cookie export needed
+   - Must be signed in to YouTube in the specified browser
+
+   **Method 2: Cookie File (For servers without browser access)**
+   ```bash
+   # Export cookies using browser extension, then:
+   YOUTUBE_COOKIE_FILE=/path/to/youtube_cookies.txt
+   ```
+
+📖 **For detailed setup instructions, see [YOUTUBE_DOWNLOAD.md](../YOUTUBE_DOWNLOAD.md)**
 
 **Features**:
 - High-quality transcription with Whisper AI
