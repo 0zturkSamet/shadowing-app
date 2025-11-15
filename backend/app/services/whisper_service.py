@@ -126,9 +126,13 @@ def get_whisper_cache_key(video_id: str) -> str:
 
 async def download_audio(youtube_url: str) -> str:
     """
-    Download audio from YouTube video using yt-dlp.
+    Download audio from YouTube video using yt-dlp with robust fallback strategies.
 
-    Downloads the best audio quality and saves to a temporary file.
+    This function implements multiple strategies to bypass YouTube bot detection:
+    1. Tries multiple player clients (iOS, Android, TV, Web)
+    2. Supports cookie authentication from browser or file
+    3. Uses exponential backoff retry logic
+    4. Provides detailed error messages for troubleshooting
 
     Args:
         youtube_url: YouTube video URL
@@ -137,73 +141,206 @@ async def download_audio(youtube_url: str) -> str:
         str: Path to downloaded audio file
 
     Raises:
-        Exception: If audio download fails
+        Exception: If audio download fails after all retry attempts
 
     Example:
         audio_path = await download_audio("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
     """
-    try:
-        logger.info(f"🎵 Downloading audio from: {youtube_url}")
+    # Define multiple download strategies with different player clients
+    # Order matters: iOS and Android clients are most reliable for bypassing restrictions
+    download_strategies = [
+        {
+            'name': 'iOS + Android clients',
+            'player_clients': ['ios', 'android'],
+            'skip_checks': ['webpage'],
+        },
+        {
+            'name': 'Android + TV clients',
+            'player_clients': ['android', 'tv'],
+            'skip_checks': ['webpage', 'configs'],
+        },
+        {
+            'name': 'iOS client only',
+            'player_clients': ['ios'],
+            'skip_checks': [],
+        },
+        {
+            'name': 'Web + Android clients',
+            'player_clients': ['web', 'android'],
+            'skip_checks': ['webpage'],
+        },
+    ]
 
-        # Create temporary file for audio
-        temp_dir = tempfile.gettempdir()
-        temp_audio_path = os.path.join(temp_dir, f"whisper_audio_{int(time.time())}.m4a")
+    last_error = None
 
-        # Configure yt-dlp options with bot detection bypass
-        ydl_opts = {
-            'format': 'bestaudio/best',  # Get best audio quality
-            'outtmpl': temp_audio_path.replace('.m4a', ''),  # Output template without extension
-            'quiet': True,  # Suppress output
-            'no_warnings': True,
-            'extract_flat': False,
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'm4a',  # m4a is compatible with Whisper
-            }],
-            # Bot detection bypass settings
-            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['android', 'web'],  # Try multiple clients
-                    'player_skip': ['webpage', 'configs'],  # Skip some checks
-                }
-            },
-            # Additional headers to avoid detection
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-us,en;q=0.5',
-                'Sec-Fetch-Mode': 'navigate',
-            },
-        }
+    # Try each strategy
+    for strategy_idx, strategy in enumerate(download_strategies, 1):
+        try:
+            logger.info(
+                f"🎵 Downloading audio (Strategy {strategy_idx}/{len(download_strategies)}: "
+                f"{strategy['name']})"
+            )
 
-        # Add cookie support to bypass YouTube bot detection
-        # Users can export cookies from their browser if needed
-        cookie_file = os.getenv('YOUTUBE_COOKIE_FILE')
-        if cookie_file and os.path.exists(cookie_file):
-            ydl_opts['cookiefile'] = cookie_file
-            logger.info(f"Using YouTube cookies from: {cookie_file}")
+            # Create temporary file for audio
+            temp_dir = tempfile.gettempdir()
+            temp_audio_path = os.path.join(temp_dir, f"whisper_audio_{int(time.time())}.m4a")
 
-        # Download audio using yt-dlp (async to avoid blocking)
-        def _download():
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([youtube_url])
-            return temp_audio_path
+            # Base yt-dlp configuration
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'outtmpl': temp_audio_path.replace('.m4a', ''),
+                'quiet': True,
+                'no_warnings': True,
+                'extract_flat': False,
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'm4a',
+                }],
+                # Enhanced bot detection bypass
+                'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': strategy['player_clients'],
+                        'player_skip': strategy['skip_checks'],
+                    }
+                },
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'en-us,en;q=0.5',
+                    'Accept-Encoding': 'gzip, deflate',
+                    'Sec-Fetch-Mode': 'navigate',
+                },
+                # Timeout and retry settings
+                'socket_timeout': 30,
+                'retries': 3,
+            }
 
-        audio_path = await asyncio.to_thread(_download)
+            # Cookie support - try multiple sources
+            cookie_added = False
 
-        # Check if file exists
-        if not os.path.exists(audio_path):
-            raise Exception(f"Audio file not created at {audio_path}")
+            # 1. Try loading cookies from browser (most reliable)
+            browser_preference = os.getenv('YOUTUBE_COOKIE_BROWSER', 'chrome')
+            if browser_preference:
+                try:
+                    ydl_opts['cookiesfrombrowser'] = (browser_preference,)
+                    cookie_added = True
+                    logger.info(f"Using cookies from {browser_preference} browser")
+                except Exception as e:
+                    logger.debug(f"Could not load cookies from browser: {e}")
 
-        file_size_mb = os.path.getsize(audio_path) / (1024 * 1024)
-        logger.info(f"✅ Successfully downloaded audio ({file_size_mb:.2f} MB)")
+            # 2. Fallback to cookie file if browser cookies not available
+            if not cookie_added:
+                cookie_file = os.getenv('YOUTUBE_COOKIE_FILE')
+                if cookie_file and os.path.exists(cookie_file):
+                    ydl_opts['cookiefile'] = cookie_file
+                    cookie_added = True
+                    logger.info(f"Using cookies from file: {cookie_file}")
 
-        return audio_path
+            if not cookie_added:
+                logger.warning(
+                    "No cookies configured. For better reliability, consider setting "
+                    "YOUTUBE_COOKIE_BROWSER=chrome or providing YOUTUBE_COOKIE_FILE"
+                )
 
-    except Exception as e:
-        logger.error(f"❌ Failed to download audio from {youtube_url}: {e}")
-        raise Exception(f"Failed to download audio from YouTube: {str(e)}")
+            # Download with retry logic (exponential backoff)
+            max_retries = 3
+            for attempt in range(1, max_retries + 1):
+                try:
+                    logger.info(f"📥 Download attempt {attempt}/{max_retries}")
+
+                    def _download():
+                        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                            ydl.download([youtube_url])
+                        return temp_audio_path
+
+                    audio_path = await asyncio.to_thread(_download)
+
+                    # Verify file exists and has content
+                    if not os.path.exists(audio_path):
+                        raise Exception(f"Audio file not created at {audio_path}")
+
+                    file_size = os.path.getsize(audio_path)
+                    if file_size == 0:
+                        raise Exception("Downloaded file is empty")
+
+                    file_size_mb = file_size / (1024 * 1024)
+                    logger.info(
+                        f"✅ Successfully downloaded audio ({file_size_mb:.2f} MB) "
+                        f"using {strategy['name']}"
+                    )
+
+                    return audio_path
+
+                except Exception as retry_error:
+                    error_msg = str(retry_error).lower()
+
+                    # Check if this is a broken pipe or connection error
+                    if any(err in error_msg for err in ['broken pipe', 'connection', 'errno 32']):
+                        if attempt < max_retries:
+                            # Exponential backoff: 2s, 4s, 8s
+                            wait_time = 2 ** attempt
+                            logger.warning(
+                                f"⚠️  Connection error on attempt {attempt}, "
+                                f"retrying in {wait_time}s... ({retry_error})"
+                            )
+                            await asyncio.sleep(wait_time)
+                            continue
+
+                    # For non-retryable errors or final attempt, raise
+                    raise retry_error
+
+        except Exception as e:
+            last_error = e
+            error_msg = str(e).lower()
+
+            # Log the failure and try next strategy
+            logger.warning(
+                f"❌ Strategy {strategy_idx} ({strategy['name']}) failed: {e}"
+            )
+
+            # If this is a permanent error (not network-related), provide helpful message
+            if 'sign in to confirm you' in error_msg or 'bot' in error_msg:
+                logger.error(
+                    "⚠️  YouTube bot detection triggered. Please:\n"
+                    "   1. Set YOUTUBE_COOKIE_BROWSER=chrome (or firefox/edge)\n"
+                    "   2. Or export cookies to a file and set YOUTUBE_COOKIE_FILE\n"
+                    "   3. See YOUTUBE_DOWNLOAD.md for detailed instructions"
+                )
+
+            # Try next strategy if available
+            if strategy_idx < len(download_strategies):
+                logger.info(f"🔄 Trying next strategy...")
+                await asyncio.sleep(1)  # Brief pause between strategies
+                continue
+            else:
+                # All strategies exhausted
+                break
+
+    # All strategies failed
+    error_detail = str(last_error) if last_error else "Unknown error"
+    logger.error(
+        f"❌ Failed to download audio after trying {len(download_strategies)} strategies. "
+        f"Last error: {error_detail}"
+    )
+
+    # Provide helpful error message based on the error type
+    if last_error:
+        error_msg = str(last_error).lower()
+        if any(err in error_msg for err in ['broken pipe', 'errno 32', 'connection']):
+            raise Exception(
+                "YouTube download failed due to connection issues (Broken Pipe). "
+                "This is usually caused by YouTube's bot detection. "
+                "Please configure browser cookies: set YOUTUBE_COOKIE_BROWSER=chrome "
+                "or see YOUTUBE_DOWNLOAD.md for detailed setup instructions."
+            )
+        elif 'sign in' in error_msg or 'bot' in error_msg:
+            raise Exception(
+                "YouTube requires authentication. Please configure cookies "
+                "(YOUTUBE_COOKIE_BROWSER=chrome) or see YOUTUBE_DOWNLOAD.md"
+            )
+
+    raise Exception(f"Failed to download audio from YouTube: {error_detail}")
 
 
 def _format_whisper_segments(segments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
