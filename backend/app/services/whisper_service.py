@@ -279,7 +279,7 @@ async def transcribe_youtube_video(
             }
 
     Raises:
-        ValueError: If URL is invalid
+        ValueError: If URL is invalid or API key not configured
         Exception: If API quota exceeded, network timeout, or transcription fails
 
     Example:
@@ -287,6 +287,14 @@ async def transcribe_youtube_video(
     """
     start_time = time.time()
     audio_path = None
+
+    # Check if OpenAI API key is configured
+    if not settings.OPENAI_API_KEY:
+        logger.error("❌ OpenAI API key is not configured")
+        raise ValueError(
+            "OpenAI API key is not configured. "
+            "Please set OPENAI_API_KEY environment variable."
+        )
 
     # Extract video ID
     try:

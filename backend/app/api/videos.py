@@ -309,6 +309,18 @@ async def transcribe_with_whisper(
             video_id = whisper_service.extract_video_id(request.youtube_url)
             logger.info(f"Extracted video ID: {video_id}")
         except ValueError as e:
+            error_msg = str(e).lower()
+            # Check if this is a configuration error (API key not set)
+            if "api key" in error_msg or "not configured" in error_msg:
+                logger.error(f"OpenAI API key not configured")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=(
+                        "Whisper transcription service is not configured. "
+                        "Please contact support or try again later."
+                    )
+                )
+            # Otherwise it's an invalid URL
             logger.error(f"Invalid YouTube URL: {request.youtube_url}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -354,6 +366,21 @@ async def transcribe_with_whisper(
             )
 
             return WhisperTranscriptResponse(**transcript_result)
+
+        except ValueError as e:
+            # Handle configuration errors (API key not set)
+            error_str = str(e).lower()
+            if "api key" in error_str or "not configured" in error_str:
+                logger.error(f"❌ OpenAI API key not configured for {video_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=(
+                        "Whisper transcription service is not configured. "
+                        "Please contact support or try again later."
+                    )
+                )
+            # Re-raise as generic error if not config-related
+            raise
 
         except Exception as e:
             error_str = str(e).lower()

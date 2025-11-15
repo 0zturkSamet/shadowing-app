@@ -4,25 +4,34 @@ FastAPI backend for the ShadowSpeak language learning application.
 
 ## Quick Start
 
-1. Install dependencies:
+1. **Configure environment variables**:
+```bash
+# Copy the example file and edit with your API keys
+cp .env.example .env
+# Edit .env and add your API keys (at minimum, add OPENAI_API_KEY)
+```
+
+2. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-2. Start database and cache services:
+3. Start database and cache services:
 ```bash
 docker-compose up -d
 ```
 
-3. Run the application:
+4. Run the application:
 ```bash
 python -m uvicorn app.main:app --reload
 ```
 
-4. Access the API:
+5. Access the API:
 - API: http://localhost:8000
 - Interactive Docs: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
+
+**Important**: The Whisper transcription service requires an `OPENAI_API_KEY` to be configured in your `.env` file. See the [OpenAI Whisper API](#openai-whisper-api) section for details.
 
 ## Project Structure
 
