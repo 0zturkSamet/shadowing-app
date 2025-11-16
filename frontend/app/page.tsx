@@ -1,11 +1,15 @@
 'use client';
 
 import Header from '@/components/Header';
+import Footer from '@/components/Footer';
 import StatCard from '@/components/StatCard';
-import { Target, Trophy, Flame, LogOut, User, Link as LinkIcon } from 'lucide-react';
+import { Target, Trophy, Flame, Play, Link as LinkIcon, Sparkles } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { BRAND, MOTIVATIONAL_QUOTES } from '@/lib/constants/branding';
+import Image from 'next/image';
 
 // Mock data for demonstration
 const mockStats = {
@@ -14,19 +18,34 @@ const mockStats = {
   currentStreak: 7,
 };
 
+// Example videos for landing page
+const exampleVideos = [
+  {
+    id: 'dQw4w9WgXcQ',
+    title: 'English Conversation Practice',
+    thumbnail: 'https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg',
+    motivation: MOTIVATIONAL_QUOTES[0],
+  },
+  {
+    id: 'jNQXAC9IVRw',
+    title: 'Learn Spanish Naturally',
+    thumbnail: 'https://img.youtube.com/vi/jNQXAC9IVRw/maxresdefault.jpg',
+    motivation: MOTIVATIONAL_QUOTES[1],
+  },
+  {
+    id: '9bZkp7q19f0',
+    title: 'Master French Pronunciation',
+    thumbnail: 'https://img.youtube.com/vi/9bZkp7q19f0/maxresdefault.jpg',
+    motivation: MOTIVATIONAL_QUOTES[2],
+  },
+];
+
 export default function Home() {
   const { user, logout, loading } = useAuth();
   const router = useRouter();
   const [url, setUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-
-  // Redirect to login if not authenticated
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/auth/login');
-    }
-  }, [user, loading, router]);
 
   // Extract video ID from various YouTube URL formats
   const extractVideoId = (url: string): string | null => {
@@ -87,57 +106,115 @@ export default function Home() {
   // Show loading while checking auth
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 via-indigo-50/30 to-purple-50/30">
+      <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-indigo-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-youtube-red mx-auto mb-4"></div>
           <p className="text-gray-600 text-lg">Loading...</p>
         </div>
       </div>
     );
   }
 
-  // Don't render if not authenticated
+  // Landing Page (Logged Out)
   if (!user) {
-    return null;
+    return (
+      <div className="min-h-screen flex flex-col bg-white">
+        <Header />
+
+        <main className="flex-1">
+          {/* Hero Section */}
+          <section className="bg-gradient-to-br from-white via-red-50/20 to-gray-50 py-20 px-4">
+            <div className="container mx-auto max-w-5xl text-center">
+              <div className="mb-6 flex justify-center">
+                <Sparkles className="w-16 h-16 text-youtube-red" />
+              </div>
+              <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6 text-secondary">
+                {BRAND.tagline.split('. ').map((part, i) => (
+                  <span key={i}>
+                    {i === 0 ? (
+                      <span className="gradient-text">{part}.</span>
+                    ) : (
+                      <span> {part}.</span>
+                    )}
+                  </span>
+                ))}
+              </h1>
+              <p className="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto mb-8">
+                {BRAND.description}
+              </p>
+              <Link
+                href="/auth/login"
+                className="inline-flex items-center space-x-3 shadowtube-button-primary px-10 py-4 text-lg"
+              >
+                <Play className="w-6 h-6" />
+                <span>Sign in with Google to start</span>
+              </Link>
+            </div>
+          </section>
+
+          {/* Example Videos Section */}
+          <section className="py-16 px-4 bg-white">
+            <div className="container mx-auto max-w-6xl">
+              <h2 className="text-3xl md:text-4xl font-bold text-center mb-12 text-secondary">
+                Start Your Journey Today
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {exampleVideos.map((video, index) => (
+                  <div
+                    key={index}
+                    className="shadowtube-card card-hover overflow-hidden group"
+                  >
+                    <div className="relative aspect-video bg-gray-100">
+                      <img
+                        src={video.thumbnail}
+                        alt={video.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-colors flex items-center justify-center">
+                        <Play className="w-16 h-16 text-white opacity-80 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                    </div>
+                    <div className="p-6">
+                      <h3 className="font-semibold text-lg mb-2 text-secondary line-clamp-2">
+                        {video.title}
+                      </h3>
+                      <p className="text-youtube-red font-medium italic">
+                        "{video.motivation}"
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="text-center mt-12">
+                <Link
+                  href="/auth/login"
+                  className="shadowtube-button-outline px-8 py-3"
+                >
+                  Get Started Now
+                </Link>
+              </div>
+            </div>
+          </section>
+        </main>
+
+        <Footer />
+      </div>
+    );
   }
 
+  // Main Interface (Logged In)
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-indigo-50/30 to-purple-50/30">
-      {/* Auth Bar */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="flex items-center justify-center w-10 h-10 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full text-white font-semibold">
-              {user.name.charAt(0).toUpperCase()}
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-900 flex items-center space-x-2">
-                <User size={16} />
-                <span>{user.name}</span>
-              </p>
-              <p className="text-xs text-gray-500">Learning {user.learning_language}</p>
-            </div>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors duration-200 font-medium"
-          >
-            <LogOut size={18} />
-            <span>Logout</span>
-          </button>
-        </div>
-      </div>
-
+    <div className="min-h-screen flex flex-col bg-white">
       <Header />
 
-      <main className="container mx-auto px-4 py-8">
-        {/* Hero Section */}
-        <section className="text-center py-12 mb-12">
-          <h2 className="text-5xl font-bold mb-4 gradient-text">
-            Master Languages Through Shadowing
+      <main className="flex-1 container mx-auto px-4 py-8">
+        {/* Welcome Message */}
+        <section className="text-center py-8 mb-8">
+          <h2 className="text-4xl md:text-5xl font-bold mb-4 text-secondary">
+            Welcome back, <span className="gradient-text">{user.name}</span>!
           </h2>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Paste any YouTube video URL and practice speaking like a native by shadowing real conversations
+            Ready to continue your language learning journey?
           </p>
         </section>
 
@@ -145,19 +222,19 @@ export default function Home() {
         <section className="mb-12">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <StatCard
-              title="Phrases Practiced"
+              title="Total Minutes Practiced"
               value={mockStats.totalPhrases}
               icon={Target}
-              gradient="from-indigo-500 to-purple-600"
+              gradient="from-youtube-red to-primary-700"
             />
             <StatCard
               title="Videos Completed"
               value={mockStats.videosCompleted}
               icon={Trophy}
-              gradient="from-purple-500 to-pink-600"
+              gradient="from-secondary to-gray-700"
             />
             <StatCard
-              title="Day Streak"
+              title="Current Streak"
               value={mockStats.currentStreak}
               icon={Flame}
               gradient="from-orange-500 to-red-600"
@@ -165,44 +242,38 @@ export default function Home() {
           </div>
         </section>
 
-        {/* URL Paste Section */}
-        <section className="mb-12 bg-white rounded-xl shadow-lg p-8">
+        {/* YouTube Input Section */}
+        <section className="mb-12 shadowtube-card p-8 max-w-3xl mx-auto">
           <div className="flex items-center mb-6">
-            <LinkIcon className="w-6 h-6 text-indigo-600 mr-3" />
-            <h3 className="text-2xl font-bold text-gray-900">
-              Start Practicing with Any YouTube Video
+            <LinkIcon className="w-6 h-6 text-youtube-red mr-3" />
+            <h3 className="text-2xl font-bold text-secondary">
+              Paste your YouTube link here
             </h3>
           </div>
 
           <form onSubmit={handleUrlSubmit} className="space-y-4">
             <div>
-              <label htmlFor="youtube-url" className="block text-sm font-medium text-gray-700 mb-2">
-                YouTube Video URL
-              </label>
               <input
                 id="youtube-url"
                 type="text"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="https://www.youtube.com/watch?v=..."
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all duration-200"
+                className="w-full px-6 py-4 text-lg border-2 border-gray-200 rounded-shadowtube focus:ring-2 focus:ring-youtube-red focus:border-youtube-red outline-none transition-all duration-200"
                 disabled={isProcessing}
               />
-              <p className="mt-2 text-sm text-gray-500">
-                Paste any YouTube video URL to start practicing
-              </p>
             </div>
 
             {error && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-sm text-red-600">{error}</p>
+              <div className="p-4 bg-red-50 border-2 border-red-200 rounded-shadowtube">
+                <p className="text-sm text-red-600 font-medium">{error}</p>
               </div>
             )}
 
             <button
               type="submit"
               disabled={isProcessing || !url.trim()}
-              className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              className="w-full shadowtube-button-primary py-4 text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
             >
               {isProcessing ? (
                 <>
@@ -211,15 +282,15 @@ export default function Home() {
                 </>
               ) : (
                 <>
-                  <Target className="w-5 h-5" />
-                  <span>Start Practice</span>
+                  <Play className="w-5 h-5" />
+                  <span>Start Shadowing</span>
                 </>
               )}
             </button>
           </form>
 
           {/* Example URLs */}
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+          <div className="mt-6 p-4 bg-gray-50 rounded-shadowtube">
             <p className="text-sm font-medium text-gray-700 mb-2">Supported URL formats:</p>
             <ul className="text-sm text-gray-600 space-y-1">
               <li>• https://www.youtube.com/watch?v=VIDEO_ID</li>
@@ -230,12 +301,7 @@ export default function Home() {
         </section>
       </main>
 
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 mt-16 py-8">
-        <div className="container mx-auto px-4 text-center text-gray-600">
-          <p>&copy; 2024 ShadowSpeak. All rights reserved.</p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

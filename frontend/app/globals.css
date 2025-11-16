@@ -4,7 +4,8 @@
 
 @layer base {
   body {
-    @apply bg-gray-50 text-gray-900;
+    @apply bg-white text-secondary;
+    font-family: 'Inter', 'Roboto', system-ui, sans-serif;
   }
 
   main {
@@ -13,21 +14,49 @@
 }
 
 @layer utilities {
+  /* ShadowTube Custom Utilities */
   .gradient-bg {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #FF0000 0%, #1A1A1A 100%);
   }
 
   .gradient-text {
-    @apply bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-youtube-red to-primary-700 bg-clip-text text-transparent;
   }
 
   .card-hover {
-    @apply transition-all duration-300 hover:shadow-xl hover:-translate-y-1;
+    @apply transition-all duration-300 hover:shadow-2xl hover:-translate-y-1;
+  }
+
+  .shadowtube-card {
+    @apply bg-white rounded-shadowtube-lg shadow-lg border border-gray-100;
+  }
+
+  .shadowtube-button {
+    @apply rounded-shadowtube font-semibold transition-all duration-200 hover:scale-105;
+  }
+
+  .shadowtube-button-primary {
+    @apply shadowtube-button bg-youtube-red text-white hover:bg-primary-600;
+  }
+
+  .shadowtube-button-secondary {
+    @apply shadowtube-button bg-secondary text-white hover:bg-secondary-600;
+  }
+
+  .shadowtube-button-outline {
+    @apply shadowtube-button border-2 border-youtube-red text-youtube-red hover:bg-youtube-red hover:text-white;
   }
 
   .line-clamp-2 {
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }

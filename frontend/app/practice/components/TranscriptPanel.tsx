@@ -12,6 +12,7 @@ interface TranscriptPanelProps {
   onMarkComplete: (sentenceId: number) => void;
   source?: "youtube" | "web_speech" | "cache" | "none";
   confidence?: number;
+  autoScroll?: boolean;
 }
 
 export function TranscriptPanel({
@@ -22,16 +23,19 @@ export function TranscriptPanel({
   onMarkComplete,
   source = "none",
   confidence,
+  autoScroll = true,
 }: TranscriptPanelProps) {
   const currentSentenceRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to current sentence
+  // Auto-scroll to current sentence (only if autoScroll is enabled)
   useEffect(() => {
-    currentSentenceRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-    });
-  }, [currentSentenceIndex]);
+    if (autoScroll) {
+      currentSentenceRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
+  }, [currentSentenceIndex, autoScroll]);
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -43,21 +47,21 @@ export function TranscriptPanel({
   const getSourceBadge = () => {
     if (source === "cache") {
       return (
-        <span className="px-2 py-0.5 bg-green-600/20 text-green-600 dark:text-green-400 rounded text-xs font-medium border border-green-600/30">
+        <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-shadowtube text-xs font-medium border border-green-200">
           💾 Cached
         </span>
       );
     }
     if (source === "youtube") {
       return (
-        <span className="px-2 py-0.5 bg-red-600/20 text-red-600 dark:text-red-400 rounded text-xs font-medium border border-red-600/30">
+        <span className="px-2 py-0.5 bg-youtube-red/10 text-youtube-red rounded-shadowtube text-xs font-medium border border-youtube-red/30">
           📺 YouTube
         </span>
       );
     }
     if (source === "web_speech") {
       return (
-        <span className="px-2 py-0.5 bg-purple-600/20 text-purple-600 dark:text-purple-400 rounded text-xs font-medium border border-purple-600/30">
+        <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-shadowtube text-xs font-medium border border-purple-200">
           🎤 Live
         </span>
       );
@@ -66,17 +70,17 @@ export function TranscriptPanel({
   };
 
   return (
-    <div className="h-full bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 flex flex-col overflow-hidden">
+    <div className="h-full shadowtube-card flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800">
+      <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
         <div className="flex items-center justify-between mb-1">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Transcript</h3>
+          <h3 className="text-sm font-bold text-secondary">Transcript</h3>
           {getSourceBadge()}
         </div>
-        <p className="text-xs text-gray-600 dark:text-gray-400">
-          Click segment • Auto-scroll • {sentences.length} phrases
+        <p className="text-xs text-gray-600">
+          {autoScroll ? '🔄 Auto-scroll ON' : '⏸️ Auto-scroll OFF'} • {sentences.length} phrases
           {confidence !== undefined && (
-            <span className="ml-2 text-gray-500 dark:text-gray-500">
+            <span className="ml-2 text-gray-500">
               • {Math.round(confidence * 100)}% confidence
             </span>
           )}
@@ -97,28 +101,28 @@ export function TranscriptPanel({
               ref={isCurrentSentence ? currentSentenceRef : null}
               onClick={() => onSentenceClick(index)}
               className={`
-                group relative p-3 rounded-lg cursor-pointer transition-all
+                group relative p-3 rounded-shadowtube cursor-pointer transition-all
                 ${
                   isCurrentSentence
-                    ? "bg-red-100 dark:bg-red-600/30 border border-red-500 shadow-lg"
+                    ? "bg-youtube-red/10 border-2 border-youtube-red shadow-lg"
                     : isFuture
-                      ? "bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
+                      ? "bg-gray-100 hover:bg-gray-150 text-gray-600 border border-transparent"
                       : isPast
-                        ? "bg-gray-50 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 opacity-70"
-                        : ""
+                        ? "bg-gray-50 text-gray-400 opacity-70 border border-transparent"
+                        : "border border-transparent"
                 }
               `}
             >
               {/* Timestamp */}
-              <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+              <div className="text-xs text-gray-500 mb-1">
                 {formatTime(sentence.start_time)}
               </div>
 
-              {/* Text */}
+              {/* Text - Current line highlighted in RED */}
               <p
                 className={`
                   text-sm leading-relaxed
-                  ${isCurrentSentence ? "text-gray-900 dark:text-white font-medium" : "text-gray-700 dark:text-gray-300"}
+                  ${isCurrentSentence ? "text-youtube-red font-bold" : "text-secondary"}
                 `}
               >
                 {sentence.text}
@@ -126,7 +130,7 @@ export function TranscriptPanel({
 
               {/* Confidence Score (if available) */}
               {sentence.confidence && (
-                <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                <div className="text-xs text-gray-500 mt-1">
                   Confidence: {Math.round(sentence.confidence * 100)}%
                 </div>
               )}
@@ -138,11 +142,11 @@ export function TranscriptPanel({
                   onMarkComplete(sentence.sentence_id);
                 }}
                 className={`
-                  absolute top-3 right-3 p-1 rounded
+                  absolute top-3 right-3 p-1 rounded-shadowtube
                   ${
                     isCompleted
                       ? "bg-green-600 text-white"
-                      : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 group-hover:bg-gray-300 dark:group-hover:bg-gray-600"
+                      : "bg-gray-200 text-gray-600 group-hover:bg-gray-300"
                   }
                   transition-colors opacity-0 group-hover:opacity-100
                 `}
