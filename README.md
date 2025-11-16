@@ -1,18 +1,39 @@
-# ShadowSpeak
+# 🎬 ShadowTube - Language Learning Through Shadowing
 
-Language learning application using YouTube videos with shadowing technique and spaced repetition.
+A modern web application for practicing language shadowing with YouTube videos. Shadow any YouTube video with synchronized transcripts, auto-scroll, and loop controls.
 
-## Overview
+![ShadowTube](https://img.shields.io/badge/Next.js-14-black)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.104-green)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)
+![Python](https://img.shields.io/badge/Python-3.11-yellow)
 
-ShadowSpeak helps users learn languages by practicing with YouTube video transcripts. The app combines the shadowing technique (listening and repeating) with spaced repetition algorithms to optimize language acquisition.
+## ✨ Features
 
-## Features
+### Core Features
+- 🎥 **YouTube Integration** - Paste any YouTube URL and start practicing
+- 📝 **Synchronized Transcripts** - Word-level synchronization with video playback
+- 🔄 **Auto-Scroll** - Transcript automatically follows video progress
+- 🔁 **Loop Mode** - Repeat sentences for better practice
+- ⏯️ **Playback Controls** - Preview, Play/Pause, Next sentence navigation
+- 📊 **Progress Tracking** - Track your practice sessions and statistics
+- 🔐 **Google Authentication** - Secure login with Google OAuth
 
-- **YouTube Integration**: Search and fetch videos with transcripts
-- **User Authentication**: Secure registration and login with JWT tokens
-- **Progress Tracking**: Monitor learning progress across videos and phrases
-- **Caching**: Redis-based caching for improved performance
-- **RESTful API**: Clean, well-documented FastAPI backend
+### Advanced Features
+- 💾 **Smart Caching** - Transcripts cached for 30 days (faster loading)
+- 🎯 **Sentence Completion** - Mark sentences as completed
+- 📈 **Dashboard** - View your practice history and statistics
+- 🌐 **Multi-language Support** - Support for 100+ languages
+- 📱 **Responsive Design** - Works on desktop, tablet, and mobile
+
+## 🎓 Example Videos
+
+Try these curated videos to get started:
+
+1. **English Conversation Practice** - `ZaUEf2C4fKQ`
+2. **Daily English Conversation** - `G8s3jukUZV0`
+3. **Learn English Pronunciation** - `dNLfdHqb2xY`
+
+*All example videos have high-quality captions and work perfectly!*
 
 ## Project Structure
 

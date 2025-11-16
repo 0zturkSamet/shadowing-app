@@ -42,42 +42,59 @@ export function ControlPanel({
     <div className="shadowtube-card p-6">
       {/* ShadowTube Control Panel */}
       <div className="mb-6">
-        {/* Feature Controls - According to Spec: Preview, Next, Loop, Auto-scroll */}
+        {/* Feature Controls - Preview, Play/Pause, Next in center, Loop and Auto-scroll on sides */}
         <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
+          {/* Preview Button - Black text */}
           <button
             onClick={onPrevious}
-            className="shadowtube-button-outline px-6 py-3 flex items-center gap-2"
+            className="shadowtube-button-outline px-6 py-3 flex items-center gap-2 text-black border-black hover:bg-gray-100"
             title="Preview Previous (P)"
           >
             <SkipBack className="w-5 h-5" />
-            <span>Preview</span>
+            <span className="font-semibold">Preview</span>
           </button>
 
+          {/* Play/Pause - Center Button */}
+          <button
+            onClick={onPlayPause}
+            className="shadowtube-button-primary px-8 py-3 rounded-full shadow-lg flex items-center gap-2"
+            title="Play/Pause (Space)"
+          >
+            {isPlaying ? (
+              <Pause className="w-6 h-6 text-white" />
+            ) : (
+              <Play className="w-6 h-6 text-white fill-white" />
+            )}
+          </button>
+
+          {/* Next Button - Black text */}
           <button
             onClick={onNext}
-            className="shadowtube-button-outline px-6 py-3 flex items-center gap-2"
+            className="shadowtube-button-outline px-6 py-3 flex items-center gap-2 text-black border-black hover:bg-gray-100"
             title="Next Sentence (N)"
           >
             <SkipForward className="w-5 h-5" />
-            <span>Next</span>
+            <span className="font-semibold">Next</span>
           </button>
 
+          {/* Loop Button - Green when active */}
           <button
             onClick={onLoop}
             className={`
               shadowtube-button px-6 py-3 flex items-center gap-2
               ${
                 isLooping
-                  ? "bg-youtube-red text-white hover:bg-primary-600"
-                  : "bg-gray-200 text-secondary hover:bg-gray-300"
+                  ? "bg-green-600 text-white hover:bg-green-700 border-green-600"
+                  : "bg-gray-200 text-secondary hover:bg-gray-300 border-gray-300"
               }
             `}
             title="Loop Sentence (L)"
           >
             <RotateCw className={`w-5 h-5 ${isLooping ? 'animate-spin' : ''}`} />
-            <span>Loop</span>
+            <span className="font-semibold">Loop</span>
           </button>
 
+          {/* Auto-scroll Button */}
           {onToggleAutoScroll && (
             <button
               onClick={onToggleAutoScroll}
@@ -85,31 +102,16 @@ export function ControlPanel({
                 shadowtube-button px-6 py-3 flex items-center gap-2
                 ${
                   autoScroll
-                    ? "bg-youtube-red text-white hover:bg-primary-600"
-                    : "bg-gray-200 text-secondary hover:bg-gray-300"
+                    ? "bg-youtube-red text-white hover:bg-primary-600 border-youtube-red"
+                    : "bg-gray-200 text-secondary hover:bg-gray-300 border-gray-300"
                 }
               `}
               title="Toggle Auto-scroll"
             >
               <ScrollText className="w-5 h-5" />
-              <span>Auto-scroll</span>
+              <span className="font-semibold">Auto-scroll</span>
             </button>
           )}
-        </div>
-
-        {/* Play/Pause - Centered Large Button */}
-        <div className="flex justify-center">
-          <button
-            onClick={onPlayPause}
-            className="shadowtube-button-primary p-6 rounded-full shadow-2xl"
-            title="Play/Pause (Space)"
-          >
-            {isPlaying ? (
-              <Pause className="w-10 h-10 text-white" />
-            ) : (
-              <Play className="w-10 h-10 text-white fill-white" />
-            )}
-          </button>
         </div>
       </div>
 

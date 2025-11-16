@@ -11,7 +11,7 @@ import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
 import { clearTranscriptCache } from "@/lib/services/transcriptCache";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, SkipBack, SkipForward, Play, Pause, ScrollText } from "lucide-react";
 
 export default function PracticePage() {
   const searchParams = useSearchParams();
@@ -19,6 +19,7 @@ export default function PracticePage() {
   const videoId = searchParams.get("v") || "";
 
   const videoRef = useRef<any>(null); // YouTube player ref
+  const transcriptRef = useRef<HTMLDivElement>(null); // Transcript container ref
   const [playerReady, setPlayerReady] = useState(false);
   const [showSourceInfo, setShowSourceInfo] = useState(false);
   const [clearCacheNotification, setClearCacheNotification] = useState<string | null>(null);
@@ -85,6 +86,16 @@ export default function PracticePage() {
     // Auto-hide after 5 seconds
     setTimeout(() => setShowSourceInfo(false), 5000);
   };
+
+  // Auto-scroll effect
+  React.useEffect(() => {
+    if (autoScroll && transcriptRef.current) {
+      const currentElement = transcriptRef.current.querySelector(`[data-line="${state.currentSentenceIndex}"]`);
+      if (currentElement) {
+        currentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [state.currentSentenceIndex, autoScroll]);
 
   // Keyboard shortcuts
   useKeyboardShortcuts({
@@ -284,56 +295,154 @@ export default function PracticePage() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 container mx-auto px-4 md:px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          {/* Video Player (Top/Left - 2/3) - 16:9 Aspect Ratio */}
-          <div className="lg:col-span-2">
-            <div className="relative w-full pb-[56.25%] bg-black rounded-shadowtube-lg overflow-hidden shadow-2xl">
-              <div className="absolute inset-0">
-                <PracticeVideoPlayer
-                  ref={videoRef}
-                  videoId={videoId}
-                  isPlaying={state.isPlaying}
-                  onTogglePlay={togglePlayPause}
-                  onPlayerReady={setPlayerReady}
-                />
+      {/* Main Content - Wireframe Design: 2-column layout */}
+      <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left Column: Video Player + Controls */}
+          <div className="space-y-6">
+            {/* Video Player */}
+            <div className="bg-black rounded-2xl overflow-hidden shadow-lg aspect-video">
+              <PracticeVideoPlayer
+                ref={videoRef}
+                videoId={videoId}
+                isPlaying={state.isPlaying}
+                onTogglePlay={togglePlayPause}
+                onPlayerReady={setPlayerReady}
+              />
+            </div>
+
+            {/* Controls - Wireframe Style */}
+            <div className="flex items-center justify-center gap-4 flex-wrap">
+              {/* Preview Button */}
+              <button
+                onClick={previousSentence}
+                className="px-6 py-3 bg-white border-2 border-black rounded-full hover:bg-gray-100 transition-colors flex items-center gap-2 font-semibold"
+                title="Preview Previous (P)"
+              >
+                <SkipBack className="w-4 h-4" />
+                Preview
+              </button>
+
+              {/* Play/Pause Button */}
+              <button
+                onClick={togglePlayPause}
+                className="px-8 py-3 bg-youtube-red text-white rounded-full hover:bg-primary-600 transition-all shadow-lg flex items-center gap-2"
+                title="Play/Pause (Space)"
+              >
+                {state.isPlaying ? (
+                  <Pause className="w-5 h-5" />
+                ) : (
+                  <Play className="w-5 h-5 fill-white" />
+                )}
+              </button>
+
+              {/* Next Button */}
+              <button
+                onClick={nextSentence}
+                className="px-6 py-3 bg-white border-2 border-black rounded-full hover:bg-gray-100 transition-colors flex items-center gap-2 font-semibold"
+                title="Next Sentence (N)"
+              >
+                Next
+                <SkipForward className="w-4 h-4" />
+              </button>
+
+              {/* Loop Button - Green when active */}
+              <button
+                onClick={toggleLoopSentence}
+                className={`px-6 py-3 rounded-full transition-all font-semibold ${
+                  state.isLooping
+                    ? "bg-green-600 text-white"
+                    : "bg-white border-2 border-gray-300 hover:border-youtube-red"
+                }`}
+                title="Loop Sentence (L)"
+              >
+                Loop {state.isLooping ? "ON" : "OFF"}
+              </button>
+
+              {/* Auto-scroll Button */}
+              <button
+                onClick={() => setAutoScroll(!autoScroll)}
+                className={`px-6 py-3 rounded-full transition-all flex items-center gap-2 font-semibold ${
+                  autoScroll
+                    ? "bg-youtube-red text-white"
+                    : "bg-white border-2 border-gray-300 hover:border-youtube-red"
+                }`}
+                title="Toggle Auto-scroll"
+              >
+                <ScrollText className="w-4 h-4" />
+                Auto-scroll {autoScroll ? "ON" : "OFF"}
+              </button>
+            </div>
+
+            {/* Progress Stats */}
+            <div className="bg-white rounded-2xl shadow-lg p-6">
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <p className="text-2xl font-bold text-secondary">
+                    {state.completedSentences.size}
+                  </p>
+                  <p className="text-xs text-gray-600 mt-1">Completed</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-youtube-red">
+                    {transcript.transcript.length > 0
+                      ? Math.round(
+                          (state.completedSentences.size /
+                            transcript.transcript.length) *
+                            100
+                        )
+                      : 0}
+                    %
+                  </p>
+                  <p className="text-xs text-gray-600 mt-1">Progress</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-secondary">
+                    {transcript.transcript.length}
+                  </p>
+                  <p className="text-xs text-gray-600 mt-1">Total</p>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Transcript Panel (Right - 1/3) */}
-          <div className="lg:h-auto h-[500px]">
-            <TranscriptPanel
-              sentences={transcript.transcript}
-              currentSentenceIndex={state.currentSentenceIndex}
-              completedSentences={state.completedSentences}
-              onSentenceClick={(index) => {
-                jumpToTime(transcript.transcript[index].start_time);
-              }}
-              onMarkComplete={markSentenceComplete}
-              source={source}
-              confidence={transcript.confidence}
-              autoScroll={autoScroll}
-            />
-          </div>
-        </div>
+          {/* Right Column: Transcript - Wireframe Style */}
+          <div className="bg-white rounded-2xl shadow-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-gray-800">Transcript</h3>
+              <div className="flex items-center gap-2 text-xs text-gray-600">
+                <span>{state.currentSentenceIndex + 1} / {transcript.transcript.length}</span>
+              </div>
+            </div>
+            <div
+              ref={transcriptRef}
+              className="space-y-3 overflow-y-auto max-h-[600px] pr-2"
+              style={{ scrollBehavior: "smooth" }}
+            >
+              {transcript.transcript.map((sentence, index) => {
+                const isCurrentSentence = index === state.currentSentenceIndex;
 
-        {/* Control Panel - Below Player */}
-        <div>
-          <ControlPanel
-            isPlaying={state.isPlaying}
-            isLooping={state.isLooping}
-            autoScroll={autoScroll}
-            completedCount={state.completedSentences.size}
-            totalCount={transcript.transcript.length}
-            onPlayPause={togglePlayPause}
-            onPrevious={previousSentence}
-            onNext={nextSentence}
-            onLoop={toggleLoopSentence}
-            onToggleAutoScroll={() => setAutoScroll(!autoScroll)}
-            onProgress={() => console.log("Progress - TODO")}
-          />
+                return (
+                  <div
+                    key={sentence.sentence_id}
+                    data-line={index}
+                    onClick={() => jumpToTime(sentence.start_time)}
+                    className={`p-4 rounded-lg cursor-pointer transition-all ${
+                      isCurrentSentence
+                        ? "bg-youtube-red text-white"
+                        : "bg-gray-50 text-gray-800 hover:bg-gray-100"
+                    }`}
+                  >
+                    <p className={`text-sm leading-relaxed ${
+                      isCurrentSentence ? "text-white font-semibold" : "text-black"
+                    }`}>
+                      {sentence.text}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 

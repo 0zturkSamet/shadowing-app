@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
+import { Play } from 'lucide-react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -13,23 +12,31 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-white px-4">
       <div className="w-full max-w-md">
+        {/* Logo */}
+        <div className="flex items-center justify-center gap-2 mb-8">
+          <div className="w-12 h-12 rounded-full bg-[#FF0000] flex items-center justify-center">
+            <Play className="w-6 h-6 text-white fill-white" />
+          </div>
+          <span className="text-2xl font-bold text-black">ShadowTube</span>
+        </div>
+
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-            Welcome to ShadowSpeak
+          <h1 className="text-3xl md:text-4xl font-bold mb-2 text-black">
+            Welcome to ShadowTube
           </h1>
           <p className="text-gray-600">Sign in to start your language learning journey</p>
         </div>
 
         {/* Login Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-8">
+        <div className="bg-white rounded-2xl shadow-lg p-8">
           <div className="space-y-6">
             {/* Google Sign In Button */}
             <button
               onClick={handleGoogleLogin}
-              className="w-full bg-white border-2 border-gray-300 text-gray-700 py-3 px-4 rounded-lg font-medium hover:border-gray-400 hover:shadow-md transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center space-x-3"
+              className="w-full bg-white border-2 border-gray-300 text-gray-700 py-3 px-4 rounded-full font-medium hover:border-[#FF0000] hover:shadow-md transition-all duration-200 flex items-center justify-center space-x-3"
             >
               <svg className="w-6 h-6" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -53,7 +60,7 @@ export default function LoginPage() {
         <div className="text-center mt-6">
           <Link
             href="/"
-            className="text-gray-600 hover:text-gray-800 text-sm hover:underline transition-colors"
+            className="text-gray-600 hover:text-[#FF0000] text-sm transition-colors"
           >
             ← Back to Home
           </Link>

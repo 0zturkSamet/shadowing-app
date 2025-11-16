@@ -118,11 +118,11 @@ export function TranscriptPanel({
                 {formatTime(sentence.start_time)}
               </div>
 
-              {/* Text - Current line highlighted in RED */}
+              {/* Text - Current line highlighted in RED, others in black */}
               <p
                 className={`
                   text-sm leading-relaxed
-                  ${isCurrentSentence ? "text-youtube-red font-bold" : "text-secondary"}
+                  ${isCurrentSentence ? "text-youtube-red font-bold" : "text-black"}
                 `}
               >
                 {sentence.text}

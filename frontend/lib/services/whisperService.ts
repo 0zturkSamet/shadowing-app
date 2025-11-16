@@ -81,7 +81,7 @@ export async function getWhisperTranscript(
   config: WhisperConfig = {}
 ): Promise<WhisperTranscriptResponse> {
   const {
-    language = 'en',
+    language, // No default - let Whisper auto-detect language!
     forceRefresh = false,
     onProgress
   } = config;

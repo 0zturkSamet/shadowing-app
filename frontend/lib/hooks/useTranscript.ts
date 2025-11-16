@@ -71,12 +71,12 @@ function mapError(message: string): TranscriptError {
  * React hook for fetching and managing video transcripts using Whisper
  *
  * @param videoId - YouTube video ID
- * @param language - Language code (default: 'en')
+ * @param language - Language code (optional - auto-detects if not provided)
  * @returns Transcript data, loading state, error, source, progress, and refetch function
  */
 export function useTranscript(
   videoId: string,
-  language: string = "en"
+  language?: string // No default - auto-detect language!
 ): UseTranscriptReturn {
   const [transcript, setTranscript] = useState<TranscriptResponse | null>(null);
   const [loading, setLoading] = useState(true);

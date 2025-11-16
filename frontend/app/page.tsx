@@ -2,43 +2,10 @@
 
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import StatCard from '@/components/StatCard';
-import { Target, Trophy, Flame, Play, Link as LinkIcon, Sparkles } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { BRAND, MOTIVATIONAL_QUOTES } from '@/lib/constants/branding';
-import Image from 'next/image';
-
-// Mock data for demonstration
-const mockStats = {
-  totalPhrases: 156,
-  videosCompleted: 23,
-  currentStreak: 7,
-};
-
-// Example videos for landing page
-const exampleVideos = [
-  {
-    id: 'dQw4w9WgXcQ',
-    title: 'English Conversation Practice',
-    thumbnail: 'https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg',
-    motivation: MOTIVATIONAL_QUOTES[0],
-  },
-  {
-    id: 'jNQXAC9IVRw',
-    title: 'Learn Spanish Naturally',
-    thumbnail: 'https://img.youtube.com/vi/jNQXAC9IVRw/maxresdefault.jpg',
-    motivation: MOTIVATIONAL_QUOTES[1],
-  },
-  {
-    id: '9bZkp7q19f0',
-    title: 'Master French Pronunciation',
-    thumbnail: 'https://img.youtube.com/vi/9bZkp7q19f0/maxresdefault.jpg',
-    motivation: MOTIVATIONAL_QUOTES[2],
-  },
-];
 
 export default function Home() {
   const { user, logout, loading } = useAuth();
@@ -115,86 +82,72 @@ export default function Home() {
     );
   }
 
-  // Landing Page (Logged Out)
+  // Landing Page (Logged Out) - Wireframe Style
   if (!user) {
+    const wireframeExamples = [
+      {
+        image: 'https://images.unsplash.com/photo-1668608322390-46344f213ce9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwZXJzb24lMjBzcGVha2luZyUyMG1pY3JvcGhvbmV8ZW58MXx8fHwxNzYzMzA4NzA5fDA&ixlib=rb-4.1.0&q=80&w=1080',
+        caption: 'Start your journey'
+      },
+      {
+        image: 'https://images.unsplash.com/photo-1758797316165-986ec92e7ad2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsYW5ndWFnZSUyMGxlYXJuaW5nJTIwcHJhY3RpY2V8ZW58MXx8fHwxNzYzMzA4NzA5fDA&ixlib=rb-4.1.0&q=80&w=1080',
+        caption: 'Consistency creates fluency'
+      },
+      {
+        image: 'https://images.unsplash.com/photo-1614492898637-435e0f87cef8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzdHVkZW50JTIwc3R1ZHlpbmclMjB2aWRlb3xlbnwxfHx8fDE3NjMzMDg3MTB8MA&ixlib=rb-4.1.0&q=80&w=1080',
+        caption: 'Shadow daily, improve instantly'
+      }
+    ];
+
     return (
       <div className="min-h-screen flex flex-col bg-white">
         <Header />
 
         <main className="flex-1">
-          {/* Hero Section */}
-          <section className="bg-gradient-to-br from-white via-red-50/20 to-gray-50 py-20 px-4">
-            <div className="container mx-auto max-w-5xl text-center">
-              <div className="mb-6 flex justify-center">
-                <Sparkles className="w-16 h-16 text-youtube-red" />
-              </div>
-              <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6 text-secondary">
-                {BRAND.tagline.split('. ').map((part, i) => (
-                  <span key={i}>
-                    {i === 0 ? (
-                      <span className="gradient-text">{part}.</span>
-                    ) : (
-                      <span> {part}.</span>
-                    )}
-                  </span>
-                ))}
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+            {/* Hero Section */}
+            <div className="text-center mb-20">
+              <h1 className="text-black mb-6 max-w-4xl mx-auto text-4xl md:text-5xl lg:text-6xl font-bold">
+                Practice Shadowing. Improve Speaking. Master Any Video.
               </h1>
-              <p className="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto mb-8">
-                {BRAND.description}
+              <p className="text-gray-600 mb-12 max-w-2xl mx-auto text-lg md:text-xl">
+                Paste any YouTube link and shadow effortlessly with auto-scroll transcripts.
               </p>
-              <Link
-                href="/auth/login"
-                className="inline-flex items-center space-x-3 shadowtube-button-primary px-10 py-4 text-lg"
-              >
-                <Play className="w-6 h-6" />
-                <span>Sign in with Google to start</span>
-              </Link>
             </div>
-          </section>
 
-          {/* Example Videos Section */}
-          <section className="py-16 px-4 bg-white">
-            <div className="container mx-auto max-w-6xl">
-              <h2 className="text-3xl md:text-4xl font-bold text-center mb-12 text-secondary">
-                Start Your Journey Today
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {exampleVideos.map((video, index) => (
+            {/* Example Videos Section */}
+            <div className="mb-16">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+                {wireframeExamples.map((example, index) => (
                   <div
                     key={index}
-                    className="shadowtube-card card-hover overflow-hidden group"
+                    className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow"
                   >
-                    <div className="relative aspect-video bg-gray-100">
+                    <div className="aspect-video w-full overflow-hidden">
                       <img
-                        src={video.thumbnail}
-                        alt={video.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        src={example.image}
+                        alt={example.caption}
+                        className="w-full h-full object-cover"
                       />
-                      <div className="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-colors flex items-center justify-center">
-                        <Play className="w-16 h-16 text-white opacity-80 group-hover:opacity-100 transition-opacity" />
-                      </div>
                     </div>
-                    <div className="p-6">
-                      <h3 className="font-semibold text-lg mb-2 text-secondary line-clamp-2">
-                        {video.title}
-                      </h3>
-                      <p className="text-youtube-red font-medium italic">
-                        "{video.motivation}"
-                      </p>
+                    <div className="p-6 text-center">
+                      <p className="text-gray-800">{example.caption}</p>
                     </div>
                   </div>
                 ))}
               </div>
-              <div className="text-center mt-12">
-                <Link
-                  href="/auth/login"
-                  className="shadowtube-button-outline px-8 py-3"
-                >
-                  Get Started Now
-                </Link>
-              </div>
             </div>
-          </section>
+
+            {/* CTA */}
+            <div className="text-center">
+              <Link
+                href="/auth/login"
+                className="inline-block px-8 py-4 bg-[#FF0000] text-white rounded-full hover:bg-[#CC0000] transition-all transform hover:scale-105 shadow-lg"
+              >
+                Sign in with Google to start
+              </Link>
+            </div>
+          </div>
         </main>
 
         <Footer />
@@ -202,103 +155,39 @@ export default function Home() {
     );
   }
 
-  // Main Interface (Logged In)
+  // Main Interface (Logged In) - Wireframe Style
   return (
     <div className="min-h-screen flex flex-col bg-white">
       <Header />
 
-      <main className="flex-1 container mx-auto px-4 py-8">
-        {/* Welcome Message */}
-        <section className="text-center py-8 mb-8">
-          <h2 className="text-4xl md:text-5xl font-bold mb-4 text-secondary">
-            Welcome back, <span className="gradient-text">{user.name}</span>!
-          </h2>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Ready to continue your language learning journey?
-          </p>
-        </section>
-
-        {/* Stats Section */}
-        <section className="mb-12">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <StatCard
-              title="Total Minutes Practiced"
-              value={mockStats.totalPhrases}
-              icon={Target}
-              gradient="from-youtube-red to-primary-700"
+      <main className="flex-1">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="bg-white rounded-2xl shadow-lg p-8">
+            <h2 className="text-gray-800 mb-6 text-2xl md:text-3xl font-bold text-center">
+              Start Your Shadowing Practice
+            </h2>
+            <input
+              type="text"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="Paste your YouTube link here"
+              className="w-full px-6 py-4 border-2 border-gray-200 rounded-full mb-6 focus:outline-none focus:border-[#FF0000] transition-colors"
+              disabled={isProcessing}
             />
-            <StatCard
-              title="Videos Completed"
-              value={mockStats.videosCompleted}
-              icon={Trophy}
-              gradient="from-secondary to-gray-700"
-            />
-            <StatCard
-              title="Current Streak"
-              value={mockStats.currentStreak}
-              icon={Flame}
-              gradient="from-orange-500 to-red-600"
-            />
-          </div>
-        </section>
-
-        {/* YouTube Input Section */}
-        <section className="mb-12 shadowtube-card p-8 max-w-3xl mx-auto">
-          <div className="flex items-center mb-6">
-            <LinkIcon className="w-6 h-6 text-youtube-red mr-3" />
-            <h3 className="text-2xl font-bold text-secondary">
-              Paste your YouTube link here
-            </h3>
-          </div>
-
-          <form onSubmit={handleUrlSubmit} className="space-y-4">
-            <div>
-              <input
-                id="youtube-url"
-                type="text"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://www.youtube.com/watch?v=..."
-                className="w-full px-6 py-4 text-lg border-2 border-gray-200 rounded-shadowtube focus:ring-2 focus:ring-youtube-red focus:border-youtube-red outline-none transition-all duration-200"
-                disabled={isProcessing}
-              />
-            </div>
-
             {error && (
-              <div className="p-4 bg-red-50 border-2 border-red-200 rounded-shadowtube">
-                <p className="text-sm text-red-600 font-medium">{error}</p>
+              <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-2xl">
+                <p className="text-sm text-red-600 font-medium text-center">{error}</p>
               </div>
             )}
-
             <button
-              type="submit"
+              onClick={handleUrlSubmit}
               disabled={isProcessing || !url.trim()}
-              className="w-full shadowtube-button-primary py-4 text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              className="w-full px-8 py-4 bg-[#FF0000] text-white rounded-full hover:bg-[#CC0000] transition-all transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
-              {isProcessing ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  <span>Loading...</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-5 h-5" />
-                  <span>Start Shadowing</span>
-                </>
-              )}
+              {isProcessing ? 'Loading...' : 'Start Shadowing'}
             </button>
-          </form>
-
-          {/* Example URLs */}
-          <div className="mt-6 p-4 bg-gray-50 rounded-shadowtube">
-            <p className="text-sm font-medium text-gray-700 mb-2">Supported URL formats:</p>
-            <ul className="text-sm text-gray-600 space-y-1">
-              <li>• https://www.youtube.com/watch?v=VIDEO_ID</li>
-              <li>• https://youtu.be/VIDEO_ID</li>
-              <li>• https://www.youtube.com/embed/VIDEO_ID</li>
-            </ul>
           </div>
-        </section>
+        </div>
       </main>
 
       <Footer />
