@@ -173,12 +173,14 @@ export function useTranscript(
     if (videoId) {
       loadTranscript();
     }
-  }, [videoId, language, loadTranscript]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoId, language]);
 
   /**
-   * Cleanup on unmount
+   * Set mounted state and cleanup on unmount
    */
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
       console.log(`[useTranscript] Component unmounted`);

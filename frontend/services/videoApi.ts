@@ -60,18 +60,24 @@ export async function transcribeWithWhisper(
 
     if (!response.ok) {
       if (response.status === 401) {
-        throw new Error("Authentication required. Please log in.");
+        console.error("[VideoAPI] Authentication failed - user not logged in or token expired");
+        throw new Error("You must be logged in to transcribe videos. Please log in and try again.");
       } else if (response.status === 404) {
+        console.error("[VideoAPI] Video not found");
         throw new Error("Video not found");
       } else if (response.status === 429) {
+        console.error("[VideoAPI] Rate limit exceeded");
         throw new Error("Too many requests. Please try again later.");
       } else if (response.status === 503) {
+        console.error("[VideoAPI] Whisper service unavailable");
         throw new Error("Whisper service is temporarily unavailable");
       } else if (response.status === 422) {
+        console.error("[VideoAPI] Invalid YouTube URL");
         throw new Error("Invalid YouTube URL format");
       }
 
       const errorData = await response.json().catch(() => null);
+      console.error("[VideoAPI] Transcription failed:", errorData);
       throw new Error(
         errorData?.detail || `Failed to transcribe video: ${response.statusText}`
       );

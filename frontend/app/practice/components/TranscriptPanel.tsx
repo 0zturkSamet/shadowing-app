@@ -43,21 +43,21 @@ export function TranscriptPanel({
   const getSourceBadge = () => {
     if (source === "cache") {
       return (
-        <span className="px-2 py-0.5 bg-green-600/20 text-green-400 rounded text-xs font-medium border border-green-600/30">
+        <span className="px-2 py-0.5 bg-green-600/20 text-green-600 dark:text-green-400 rounded text-xs font-medium border border-green-600/30">
           💾 Cached
         </span>
       );
     }
     if (source === "youtube") {
       return (
-        <span className="px-2 py-0.5 bg-blue-600/20 text-blue-400 rounded text-xs font-medium border border-blue-600/30">
+        <span className="px-2 py-0.5 bg-red-600/20 text-red-600 dark:text-red-400 rounded text-xs font-medium border border-red-600/30">
           📺 YouTube
         </span>
       );
     }
     if (source === "web_speech") {
       return (
-        <span className="px-2 py-0.5 bg-purple-600/20 text-purple-400 rounded text-xs font-medium border border-purple-600/30">
+        <span className="px-2 py-0.5 bg-purple-600/20 text-purple-600 dark:text-purple-400 rounded text-xs font-medium border border-purple-600/30">
           🎤 Live
         </span>
       );
@@ -66,17 +66,17 @@ export function TranscriptPanel({
   };
 
   return (
-    <div className="h-full bg-gray-900 rounded-lg border border-gray-800 flex flex-col overflow-hidden">
+    <div className="h-full bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-800">
+      <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800">
         <div className="flex items-center justify-between mb-1">
-          <h3 className="text-sm font-semibold text-white">Transcript</h3>
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Transcript</h3>
           {getSourceBadge()}
         </div>
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-gray-600 dark:text-gray-400">
           Click segment • Auto-scroll • {sentences.length} phrases
           {confidence !== undefined && (
-            <span className="ml-2 text-gray-500">
+            <span className="ml-2 text-gray-500 dark:text-gray-500">
               • {Math.round(confidence * 100)}% confidence
             </span>
           )}
@@ -100,17 +100,17 @@ export function TranscriptPanel({
                 group relative p-3 rounded-lg cursor-pointer transition-all
                 ${
                   isCurrentSentence
-                    ? "bg-blue-600/30 border border-blue-500 shadow-lg"
+                    ? "bg-red-100 dark:bg-red-600/30 border border-red-500 shadow-lg"
                     : isFuture
-                      ? "bg-gray-800 hover:bg-gray-700 text-gray-400"
+                      ? "bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
                       : isPast
-                        ? "bg-gray-800/50 text-gray-500 opacity-70"
+                        ? "bg-gray-50 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 opacity-70"
                         : ""
                 }
               `}
             >
               {/* Timestamp */}
-              <div className="text-xs text-gray-400 mb-1">
+              <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
                 {formatTime(sentence.start_time)}
               </div>
 
@@ -118,7 +118,7 @@ export function TranscriptPanel({
               <p
                 className={`
                   text-sm leading-relaxed
-                  ${isCurrentSentence ? "text-white font-medium" : "text-gray-300"}
+                  ${isCurrentSentence ? "text-gray-900 dark:text-white font-medium" : "text-gray-700 dark:text-gray-300"}
                 `}
               >
                 {sentence.text}
@@ -126,7 +126,7 @@ export function TranscriptPanel({
 
               {/* Confidence Score (if available) */}
               {sentence.confidence && (
-                <div className="text-xs text-gray-500 mt-1">
+                <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
                   Confidence: {Math.round(sentence.confidence * 100)}%
                 </div>
               )}
@@ -142,7 +142,7 @@ export function TranscriptPanel({
                   ${
                     isCompleted
                       ? "bg-green-600 text-white"
-                      : "bg-gray-700 text-gray-400 group-hover:bg-gray-600"
+                      : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 group-hover:bg-gray-300 dark:group-hover:bg-gray-600"
                   }
                   transition-colors opacity-0 group-hover:opacity-100
                 `}

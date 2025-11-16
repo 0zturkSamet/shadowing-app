@@ -86,13 +86,36 @@ export async function getWhisperTranscript(
     onProgress
   } = config;
 
-  try {
-    // Extract video ID if URL provided
-    const extractedId = extractVideoId(videoId);
-    if (!extractedId) {
-      throw new Error('Invalid video ID or URL');
-    }
+  // Extract video ID if URL provided (move outside try block for error handling)
+  const extractedId = extractVideoId(videoId);
+  if (!extractedId) {
+    const errorMessage = 'Invalid video ID or URL';
 
+    console.error('[WhisperService] Transcription error:', {
+      videoId,
+      error: errorMessage
+    });
+
+    onProgress?.({
+      stage: 'error',
+      message: errorMessage,
+      percentage: 100
+    });
+
+    return {
+      status: 'error',
+      transcript: [],
+      message: errorMessage,
+      totalSentences: 0,
+      confidence: 0,
+      processingTime: 0,
+      language,
+      source: 'whisper',
+      video_id: videoId
+    };
+  }
+
+  try {
     // Build YouTube URL
     const youtubeUrl = buildYouTubeUrl(extractedId);
 
@@ -143,6 +166,13 @@ export async function getWhisperTranscript(
   } catch (error: any) {
     const errorMessage = error.message || 'Failed to transcribe video';
 
+    console.error('[WhisperService] Transcription error:', {
+      videoId: extractedId,
+      error: errorMessage,
+      errorType: error.constructor.name,
+      stack: error.stack
+    });
+
     onProgress?.({
       stage: 'error',
       message: errorMessage,
@@ -158,7 +188,7 @@ export async function getWhisperTranscript(
       processingTime: 0,
       language,
       source: 'whisper',
-      video_id: videoId
+      video_id: extractedId
     };
   }
 }

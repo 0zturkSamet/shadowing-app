@@ -6,25 +6,27 @@ import { PracticeVideoPlayer } from "./components/VideoPlayer";
 import { TranscriptPanel } from "./components/TranscriptPanel";
 import { ControlPanel } from "./components/ControlPanel";
 import { useTranscript } from "@/lib/hooks/useTranscript";
-import { useVideoSync } from "@/lib/hooks/useVideoSync";
+import { useYouTubeSync } from "@/lib/hooks/useYouTubeSync";
 import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
 import { clearTranscriptCache } from "@/lib/services/transcriptCache";
+import { useTheme } from "@/contexts/ThemeContext";
+import { Sun, Moon } from "lucide-react";
 
 export default function PracticePage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const videoId = searchParams.get("v") || "";
+  const { theme, toggleTheme } = useTheme();
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [volume, setVolume] = useState(1);
-  const [isMuted, setIsMuted] = useState(false);
+  const videoRef = useRef<any>(null); // YouTube player ref
+  const [playerReady, setPlayerReady] = useState(false);
   const [showSourceInfo, setShowSourceInfo] = useState(false);
   const [clearCacheNotification, setClearCacheNotification] = useState<string | null>(null);
 
   // Fetch transcript with intelligent fallback (YouTube → Web Speech)
   const { transcript, loading, error, source, progress, loadingMessage, refetch } = useTranscript(videoId);
 
-  // Video synchronization
+  // Video synchronization with YouTube player
   const {
     state,
     jumpToTime,
@@ -32,16 +34,29 @@ export default function PracticePage() {
     previousSentence,
     toggleLoopSentence,
     markSentenceComplete,
-  } = useVideoSync(transcript?.transcript || [], videoRef);
+  } = useYouTubeSync(transcript?.transcript || [], videoRef, playerReady);
 
-  // Toggle play/pause
+  // Toggle play/pause (YouTube IFrame API methods)
   const togglePlayPause = () => {
-    if (videoRef.current) {
-      if (state.isPlaying) {
-        videoRef.current.pause();
-      } else {
-        videoRef.current.play();
+    console.log('[PracticePage] togglePlayPause called');
+    console.log('[PracticePage] videoRef.current:', videoRef.current);
+    console.log('[PracticePage] Has playVideo?', !!videoRef.current?.playVideo);
+    console.log('[PracticePage] Has pauseVideo?', !!videoRef.current?.pauseVideo);
+
+    if (videoRef.current && videoRef.current.playVideo && videoRef.current.pauseVideo) {
+      try {
+        if (state.isPlaying) {
+          console.log('[PracticePage] Pausing video');
+          videoRef.current.pauseVideo();
+        } else {
+          console.log('[PracticePage] Playing video');
+          videoRef.current.playVideo();
+        }
+      } catch (error) {
+        console.error("Error toggling video playback:", error);
       }
+    } else {
+      console.error('[PracticePage] Player not ready or missing methods');
     }
   };
 
@@ -94,36 +109,36 @@ export default function PracticePage() {
     }
 
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
         <div className="text-center max-w-md">
           {/* Spinner */}
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-6"></div>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-red-600 mx-auto mb-6"></div>
 
           {/* Source Badge */}
           <div className="mb-4">
-            <span className="inline-block px-4 py-2 bg-blue-600/20 text-blue-400 rounded-full text-sm font-medium border border-blue-600/30">
+            <span className="inline-block px-4 py-2 bg-red-600/20 text-red-600 dark:text-red-400 rounded-full text-sm font-medium border border-red-600/30">
               {sourceBadge}
             </span>
           </div>
 
           {/* Loading Message */}
-          <p className="text-gray-300 text-lg font-medium mb-2">
+          <p className="text-gray-800 dark:text-gray-300 text-lg font-medium mb-2">
             {loadingMessage}
           </p>
 
           {/* Progress Bar */}
           <div className="mt-6 w-80 mx-auto">
-            <div className="bg-gray-800 rounded-full h-3 overflow-hidden shadow-inner">
+            <div className="bg-gray-200 dark:bg-gray-800 rounded-full h-3 overflow-hidden shadow-inner">
               <div
-                className="bg-gradient-to-r from-blue-600 to-blue-500 h-full transition-all duration-300 ease-out"
+                className="bg-gradient-to-r from-red-600 to-red-500 h-full transition-all duration-300 ease-out"
                 style={{ width: `${progress}%` }}
               ></div>
             </div>
-            <p className="text-gray-400 text-sm mt-2 font-mono">{progress}%</p>
+            <p className="text-gray-600 dark:text-gray-400 text-sm mt-2 font-mono">{progress}%</p>
           </div>
 
           {/* Helpful hint */}
-          <p className="text-gray-500 text-xs mt-6">
+          <p className="text-gray-500 dark:text-gray-500 text-xs mt-6">
             This may take a moment while we fetch your transcript...
           </p>
         </div>
@@ -131,38 +146,38 @@ export default function PracticePage() {
     );
   }
 
-  // Error state
-  if (error || !transcript) {
+  // Error state - only show if we have an actual error AND we're not loading
+  if (error && !loading) {
     const isBrowserUnsupported = error?.type === "browser_unsupported";
     const isInvalidVideo = error?.type === "invalid_video";
     const isNoCaptions = error?.type === "no_captions";
 
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-6">
         <div className="text-center max-w-lg">
           {/* Error Icon */}
           <div className="mb-6">
             <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto border border-red-500/30">
-              <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-8 h-8 text-red-500 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
           </div>
 
           {/* Error Title */}
-          <h2 className="text-2xl font-bold text-red-400 mb-3">
+          <h2 className="text-2xl font-bold text-red-600 dark:text-red-400 mb-3">
             Could not load transcript
           </h2>
 
           {/* Error Message */}
-          <p className="text-gray-300 mb-2">
+          <p className="text-gray-800 dark:text-gray-300 mb-2">
             {error?.message || "An unexpected error occurred"}
           </p>
 
           {/* Helpful suggestions based on error type */}
-          <div className="mt-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700 text-left">
-            <p className="text-gray-400 text-sm mb-2 font-medium">💡 What you can do:</p>
-            <ul className="text-gray-400 text-sm space-y-1 list-disc list-inside">
+          <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800/50 rounded-lg border border-gray-300 dark:border-gray-700 text-left">
+            <p className="text-gray-700 dark:text-gray-400 text-sm mb-2 font-medium">💡 What you can do:</p>
+            <ul className="text-gray-600 dark:text-gray-400 text-sm space-y-1 list-disc list-inside">
               {isBrowserUnsupported && (
                 <>
                   <li>Use a modern browser (Chrome, Edge, or Safari)</li>
@@ -199,21 +214,21 @@ export default function PracticePage() {
             {error?.retryable && (
               <button
                 onClick={refetch}
-                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition shadow-lg hover:shadow-xl"
+                className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition shadow-lg hover:shadow-xl"
               >
                 🔄 Try Again
               </button>
             )}
             <button
               onClick={() => router.back()}
-              className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition"
+              className="px-6 py-3 bg-gray-300 hover:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg font-medium transition"
             >
               ← Go Back
             </button>
           </div>
 
           {/* Additional help text */}
-          <p className="text-gray-500 text-xs mt-6">
+          <p className="text-gray-500 dark:text-gray-500 text-xs mt-6">
             Need help? Check that your browser supports modern web features and that the video has captions available.
           </p>
         </div>
@@ -221,48 +236,64 @@ export default function PracticePage() {
     );
   }
 
+  // Don't render if transcript is not loaded yet
+  if (!transcript) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-red-600 mx-auto mb-6"></div>
+          <p className="text-gray-800 dark:text-gray-300 text-lg">Loading transcript...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Header */}
-      <div className="bg-gray-900 border-b border-gray-800 px-6 py-4">
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-white">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
                 Practice Shadowing
               </h1>
-              <p className="text-gray-400 text-sm mt-1">
+              <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">
                 {state.currentSentenceIndex + 1} / {transcript.transcript.length} sentences
               </p>
             </div>
             {/* Source Badge */}
             {source === "cache" && (
-              <span className="px-3 py-1.5 bg-green-600/20 text-green-400 rounded-full text-xs font-medium border border-green-600/30 flex items-center gap-1.5">
+              <span className="px-3 py-1.5 bg-green-600/20 text-green-600 dark:text-green-400 rounded-full text-xs font-medium border border-green-600/30 flex items-center gap-1.5">
                 💾 Cached
               </span>
             )}
             {source === "youtube" && (
-              <span className="px-3 py-1.5 bg-blue-600/20 text-blue-400 rounded-full text-xs font-medium border border-blue-600/30 flex items-center gap-1.5">
+              <span className="px-3 py-1.5 bg-red-600/20 text-red-600 dark:text-red-400 rounded-full text-xs font-medium border border-red-600/30 flex items-center gap-1.5">
                 📺 YouTube Captions
               </span>
             )}
             {source === "web_speech" && (
-              <span className="px-3 py-1.5 bg-purple-600/20 text-purple-400 rounded-full text-xs font-medium border border-purple-600/30 flex items-center gap-1.5">
+              <span className="px-3 py-1.5 bg-purple-600/20 text-purple-600 dark:text-purple-400 rounded-full text-xs font-medium border border-purple-600/30 flex items-center gap-1.5">
                 🎤 Live Transcription
               </span>
             )}
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={refetch}
-              className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-sm transition flex items-center gap-2"
-              title="Refresh transcript (R)"
+              onClick={toggleTheme}
+              className="p-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg transition"
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             >
-              🔄 Refresh
+              {theme === "dark" ? (
+                <Sun className="w-5 h-5" />
+              ) : (
+                <Moon className="w-5 h-5" />
+              )}
             </button>
             <button
               onClick={() => router.back()}
-              className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition"
+              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded transition"
             >
               Quit
             </button>
@@ -271,29 +302,21 @@ export default function PracticePage() {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-3 gap-6">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Video Player (Left - 2/3) */}
-          <div className="col-span-2 h-[600px]">
+          <div className="lg:col-span-2 h-[300px] md:h-[400px] lg:h-[600px]">
             <PracticeVideoPlayer
               ref={videoRef}
               videoId={videoId}
               isPlaying={state.isPlaying}
-              volume={volume}
-              isMuted={isMuted}
               onTogglePlay={togglePlayPause}
-              onVolumeChange={setVolume}
-              onToggleMute={() => setIsMuted(!isMuted)}
-              onFullscreen={() => {
-                if (videoRef.current) {
-                  videoRef.current.requestFullscreen();
-                }
-              }}
+              onPlayerReady={setPlayerReady}
             />
           </div>
 
           {/* Transcript Panel (Right - 1/3) */}
-          <div className="h-[600px]">
+          <div className="h-[400px] lg:h-[600px]">
             <TranscriptPanel
               sentences={transcript.transcript}
               currentSentenceIndex={state.currentSentenceIndex}
@@ -309,7 +332,7 @@ export default function PracticePage() {
         </div>
 
         {/* Control Panel */}
-        <div className="mt-8">
+        <div className="mt-6 md:mt-8">
           <ControlPanel
             isPlaying={state.isPlaying}
             isLooping={state.isLooping}
@@ -319,7 +342,6 @@ export default function PracticePage() {
             onPrevious={previousSentence}
             onNext={nextSentence}
             onLoop={toggleLoopSentence}
-            onRecord={() => console.log("Record - TODO")}
             onProgress={() => console.log("Progress - TODO")}
           />
         </div>
@@ -327,20 +349,20 @@ export default function PracticePage() {
 
       {/* Cache Clear Notification */}
       {clearCacheNotification && (
-        <div className="fixed bottom-8 right-8 bg-gray-800 border border-gray-700 rounded-lg shadow-xl px-6 py-4 max-w-sm animate-in slide-in-from-bottom">
+        <div className="fixed bottom-8 right-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl px-6 py-4 max-w-sm animate-in slide-in-from-bottom">
           <div className="flex items-start gap-3">
-            <div className="flex-shrink-0 w-10 h-10 bg-blue-600/20 rounded-full flex items-center justify-center border border-blue-600/30">
-              <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="flex-shrink-0 w-10 h-10 bg-red-600/20 rounded-full flex items-center justify-center border border-red-600/30">
+              <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
             <div className="flex-1">
-              <p className="text-white font-medium text-sm">Cache Cleared</p>
-              <p className="text-gray-400 text-xs mt-1">{clearCacheNotification}</p>
+              <p className="text-gray-900 dark:text-white font-medium text-sm">Cache Cleared</p>
+              <p className="text-gray-600 dark:text-gray-400 text-xs mt-1">{clearCacheNotification}</p>
             </div>
             <button
               onClick={() => setClearCacheNotification(null)}
-              className="text-gray-500 hover:text-gray-300 transition"
+              className="text-gray-500 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -353,12 +375,12 @@ export default function PracticePage() {
       {/* Source Info Modal */}
       {showSourceInfo && transcript && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in">
-          <div className="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl p-8 max-w-md w-full mx-4 animate-in zoom-in-95">
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg shadow-2xl p-8 max-w-md w-full mx-4 animate-in zoom-in-95">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-white">Transcript Source</h3>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white">Transcript Source</h3>
               <button
                 onClick={() => setShowSourceInfo(false)}
-                className="text-gray-500 hover:text-gray-300 transition"
+                className="text-gray-500 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition"
               >
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -368,20 +390,23 @@ export default function PracticePage() {
 
             <div className="space-y-4">
               {/* Source Badge */}
-              <div className="flex items-center gap-3 p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+              <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
                 <div className="text-3xl">
                   {source === "cache" && "💾"}
+                  {source === "whisper" && "🤖"}
                   {source === "youtube" && "📺"}
                   {source === "web_speech" && "🎤"}
                 </div>
                 <div>
-                  <p className="text-white font-medium">
+                  <p className="text-gray-900 dark:text-white font-medium">
                     {source === "cache" && "Cached Transcript"}
+                    {source === "whisper" && "Whisper AI Transcript"}
                     {source === "youtube" && "YouTube Captions"}
                     {source === "web_speech" && "Live Transcription"}
                   </p>
-                  <p className="text-gray-400 text-sm">
+                  <p className="text-gray-600 dark:text-gray-400 text-sm">
                     {source === "cache" && "Loaded from local storage"}
+                    {source === "whisper" && "Transcribed with OpenAI Whisper"}
                     {source === "youtube" && "Fetched from YouTube API"}
                     {source === "web_speech" && "Real-time Web Speech API"}
                   </p>
@@ -390,45 +415,45 @@ export default function PracticePage() {
 
               {/* Transcript Stats */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700">
-                  <p className="text-gray-400 text-xs">Sentences</p>
-                  <p className="text-white font-bold text-lg">{transcript.totalSentences}</p>
+                <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <p className="text-gray-600 dark:text-gray-400 text-xs">Sentences</p>
+                  <p className="text-gray-900 dark:text-white font-bold text-lg">{transcript.totalSentences}</p>
                 </div>
                 {transcript.confidence !== undefined && (
-                  <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700">
-                    <p className="text-gray-400 text-xs">Confidence</p>
-                    <p className="text-white font-bold text-lg">
+                  <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <p className="text-gray-600 dark:text-gray-400 text-xs">Confidence</p>
+                    <p className="text-gray-900 dark:text-white font-bold text-lg">
                       {Math.round(transcript.confidence * 100)}%
                     </p>
                   </div>
                 )}
-                <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700">
-                  <p className="text-gray-400 text-xs">Language</p>
-                  <p className="text-white font-bold text-lg uppercase">{transcript.language}</p>
+                <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <p className="text-gray-600 dark:text-gray-400 text-xs">Language</p>
+                  <p className="text-gray-900 dark:text-white font-bold text-lg uppercase">{transcript.language}</p>
                 </div>
                 {transcript.cached && (
-                  <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700">
-                    <p className="text-gray-400 text-xs">Cached</p>
-                    <p className="text-green-400 font-bold text-lg">Yes</p>
+                  <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <p className="text-gray-600 dark:text-gray-400 text-xs">Cached</p>
+                    <p className="text-green-600 dark:text-green-400 font-bold text-lg">Yes</p>
                   </div>
                 )}
               </div>
 
               {/* Keyboard Shortcuts */}
-              <div className="p-4 bg-blue-600/10 rounded-lg border border-blue-600/30">
-                <p className="text-blue-400 text-xs font-medium mb-2">Keyboard Shortcuts</p>
-                <div className="space-y-1 text-xs text-gray-300">
+              <div className="p-4 bg-red-50 dark:bg-red-600/10 rounded-lg border border-red-200 dark:border-red-600/30">
+                <p className="text-red-600 dark:text-red-400 text-xs font-medium mb-2">Keyboard Shortcuts</p>
+                <div className="space-y-1 text-xs text-gray-700 dark:text-gray-300">
                   <div className="flex justify-between">
                     <span>Refresh transcript</span>
-                    <kbd className="px-2 py-0.5 bg-gray-800 rounded border border-gray-700 font-mono">R</kbd>
+                    <kbd className="px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-700 font-mono">R</kbd>
                   </div>
                   <div className="flex justify-between">
                     <span>Clear cache</span>
-                    <kbd className="px-2 py-0.5 bg-gray-800 rounded border border-gray-700 font-mono">C</kbd>
+                    <kbd className="px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-700 font-mono">C</kbd>
                   </div>
                   <div className="flex justify-between">
                     <span>Show source info</span>
-                    <kbd className="px-2 py-0.5 bg-gray-800 rounded border border-gray-700 font-mono">S</kbd>
+                    <kbd className="px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-700 font-mono">S</kbd>
                   </div>
                 </div>
               </div>

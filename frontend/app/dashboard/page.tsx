@@ -1,214 +1,199 @@
 'use client';
 
-import Header from '@/components/Header';
-import StatCard from '@/components/StatCard';
-import { Target, Trophy, Flame, TrendingUp, Award, Clock } from 'lucide-react';
-import Link from 'next/link';
+import { useState } from 'react';
+import { Play, Search, Clock, ChevronRight } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useTheme } from '@/contexts/ThemeContext';
+import { Sun, Moon } from "lucide-react";
 
-// Mock data
-const mockUserProgress = {
-  totalPhrasesPracticed: 156,
-  totalVideosCompleted: 23,
-  averageScore: 87,
-  currentStreak: 7,
-  bestStreak: 14,
-  totalPracticeTime: 4320, // in minutes
-  level: 'Intermediate',
-};
-
-const mockRecentVideos = [
+// Mock recent activity data
+const mockRecentActivity = [
   {
     id: '1',
-    title: 'Daily English Conversation - Coffee Shop',
-    language: 'English',
-    completedAt: '2024-01-15',
-    score: 92,
+    title: '800+ hours of Learning Claude Code in 8 minutes',
+    videoId: 'ZaUEf2C4fKQ',
+    type: 'transcript',
+    date: '2 minutes ago',
   },
   {
     id: '2',
-    title: 'Spanish Travel Phrases',
-    language: 'Spanish',
-    completedAt: '2024-01-14',
-    score: 85,
+    title: 'Spanish Conversation Practice - Coffee Shop',
+    videoId: 'abc123',
+    type: 'transcript',
+    date: '11/8/2025',
   },
   {
     id: '3',
-    title: 'French Business Meeting',
-    language: 'French',
-    completedAt: '2024-01-13',
-    score: 78,
+    title: 'German Grammar Basics',
+    videoId: 'def456',
+    type: 'transcript',
+    date: '11/7/2025',
   },
 ];
 
-const mockAchievements = [
-  { name: 'First Steps', description: 'Complete your first practice session', earned: true },
-  { name: '7-Day Streak', description: 'Practice for 7 days in a row', earned: true },
-  { name: 'Perfect Score', description: 'Get 100% on any phrase', earned: false },
-  { name: 'Polyglot', description: 'Practice in 3 different languages', earned: true },
-  { name: '100 Phrases', description: 'Practice 100 phrases', earned: true },
-  { name: '14-Day Streak', description: 'Practice for 14 days in a row', earned: false },
-];
-
 export default function DashboardPage() {
-  const formatTime = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours}h ${mins}m`;
+  const router = useRouter();
+  const { theme, toggleTheme } = useTheme();
+  const [videoUrl, setVideoUrl] = useState('');
+
+  const handleStartPractice = () => {
+    if (videoUrl.trim()) {
+      // Extract video ID from YouTube URL
+      const videoId = extractYouTubeId(videoUrl);
+      if (videoId) {
+        router.push(`/practice?v=${videoId}`);
+      }
+    }
+  };
+
+  const extractYouTubeId = (url: string): string | null => {
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
+      /^([a-zA-Z0-9_-]{11})$/
+    ];
+
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match) return match[1];
+    }
+    return null;
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-indigo-50/30 to-purple-50/30">
-      <Header />
-
-      <main className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold gradient-text mb-2">Your Dashboard</h1>
-          <p className="text-gray-600">Track your progress and achievements</p>
-        </div>
-
-        {/* Stats Grid */}
-        <section className="mb-12">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Your Statistics</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <StatCard
-              title="Phrases Practiced"
-              value={mockUserProgress.totalPhrasesPracticed}
-              icon={Target}
-              gradient="from-indigo-500 to-purple-600"
-            />
-            <StatCard
-              title="Videos Completed"
-              value={mockUserProgress.totalVideosCompleted}
-              icon={Trophy}
-              gradient="from-purple-500 to-pink-600"
-            />
-            <StatCard
-              title="Current Streak"
-              value={mockUserProgress.currentStreak}
-              icon={Flame}
-              gradient="from-orange-500 to-red-600"
-            />
-            <StatCard
-              title="Average Score"
-              value={`${mockUserProgress.averageScore}%`}
-              icon={TrendingUp}
-              gradient="from-emerald-500 to-teal-600"
-            />
-            <StatCard
-              title="Best Streak"
-              value={mockUserProgress.bestStreak}
-              icon={Award}
-              gradient="from-yellow-500 to-orange-600"
-            />
-            <StatCard
-              title="Practice Time"
-              value={formatTime(mockUserProgress.totalPracticeTime)}
-              icon={Clock}
-              gradient="from-blue-500 to-indigo-600"
-            />
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      {/* Header with theme toggle */}
+      <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">ShadowSpeak</h1>
           </div>
-        </section>
+          <button
+            onClick={toggleTheme}
+            className="p-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg transition"
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {theme === "dark" ? (
+              <Sun className="w-5 h-5" />
+            ) : (
+              <Moon className="w-5 h-5" />
+            )}
+          </button>
+        </div>
+      </div>
 
-        {/* Progress Chart Placeholder */}
-        <section className="mb-12">
-          <div className="bg-white rounded-xl shadow-lg p-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Progress Over Time</h2>
-            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg p-12 flex items-center justify-center">
-              <div className="text-center">
-                <TrendingUp className="w-16 h-16 text-indigo-400 mx-auto mb-4" />
-                <p className="text-gray-600 font-medium">Progress chart coming soon</p>
-                <p className="text-gray-500 text-sm mt-2">
-                  Track your daily practice and score improvements
-                </p>
+      {/* Main Content */}
+      <div className="max-w-4xl mx-auto px-6 py-16">
+        {/* Action Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-16">
+          {/* Start Practice Card */}
+          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-8 hover:shadow-lg transition-shadow">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 bg-red-100 dark:bg-red-600/20 rounded-lg">
+                <Play className="w-6 h-6 text-red-600 dark:text-red-400" />
               </div>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Practice</h2>
+            </div>
+            <p className="text-gray-600 dark:text-gray-400 text-sm mb-6">
+              Start shadowing with any YouTube video
+            </p>
+            <div className="space-y-3">
+              <input
+                type="text"
+                value={videoUrl}
+                onChange={(e) => setVideoUrl(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleStartPractice()}
+                placeholder="Paste YouTube URL or video ID"
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 dark:focus:ring-red-600"
+              />
+              <button
+                onClick={handleStartPractice}
+                disabled={!videoUrl.trim()}
+                className="w-full py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
+              >
+                Start Practice
+              </button>
             </div>
           </div>
-        </section>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Recent Videos */}
-          <section>
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Recent Practice</h2>
-              <div className="space-y-4">
-                {mockRecentVideos.map((video) => (
-                  <div
-                    key={video.id}
-                    className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <div className="flex-1">
-                      <Link href={`/practice?v=${video.id}`}>
-                        <h3 className="font-semibold text-gray-900 hover:text-indigo-600 transition-colors">
-                          {video.title}
-                        </h3>
-                      </Link>
-                      <div className="flex items-center gap-3 mt-1">
-                        <span className="text-sm text-gray-500">{video.language}</span>
-                        <span className="text-sm text-gray-400">•</span>
-                        <span className="text-sm text-gray-500">{video.completedAt}</span>
+          {/* Browse Videos Card */}
+          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-8 hover:shadow-lg transition-shadow">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                <Search className="w-6 h-6 text-gray-700 dark:text-gray-300" />
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Browse</h2>
+            </div>
+            <p className="text-gray-600 dark:text-gray-400 text-sm mb-6">
+              Discover curated videos for language learning
+            </p>
+            <button
+              onClick={() => router.push('/')}
+              className="w-full py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white rounded-lg font-medium transition-colors"
+            >
+              Browse Videos
+            </button>
+          </div>
+        </div>
+
+        {/* Recent Activity */}
+        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800">
+            <div className="flex items-center gap-2">
+              <Clock className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent activity</h3>
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Your latest practice sessions
+            </p>
+          </div>
+
+          <div className="divide-y divide-gray-200 dark:divide-gray-800">
+            {mockRecentActivity.map((activity) => (
+              <button
+                key={activity.id}
+                onClick={() => router.push(`/practice?v=${activity.videoId}`)}
+                className="w-full px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left group"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded">
+                        <Play className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <div className={`text-2xl font-bold ${
-                        video.score >= 90 ? 'text-emerald-600' :
-                        video.score >= 75 ? 'text-yellow-600' :
-                        'text-orange-600'
-                      }`}>
-                        {video.score}%
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors">
+                          {activity.title}
+                        </h4>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">
+                            {activity.type}
+                          </span>
+                          <span className="text-xs text-gray-400 dark:text-gray-500">•</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {activity.date}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                ))}
-              </div>
-              <Link href="/">
-                <button className="w-full mt-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-medium hover:from-indigo-700 hover:to-purple-700 transition-all">
-                  Find More Videos
-                </button>
-              </Link>
-            </div>
-          </section>
-
-          {/* Achievements */}
-          <section>
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Achievements</h2>
-              <div className="space-y-3">
-                {mockAchievements.map((achievement, index) => (
-                  <div
-                    key={index}
-                    className={`p-4 rounded-lg border-2 ${
-                      achievement.earned
-                        ? 'bg-emerald-50 border-emerald-200'
-                        : 'bg-gray-50 border-gray-200 opacity-60'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
-                        achievement.earned ? 'bg-emerald-500' : 'bg-gray-300'
-                      }`}>
-                        <Award className="w-6 h-6 text-white" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className={`font-semibold ${
-                          achievement.earned ? 'text-gray-900' : 'text-gray-500'
-                        }`}>
-                          {achievement.name}
-                        </h3>
-                        <p className={`text-sm ${
-                          achievement.earned ? 'text-gray-600' : 'text-gray-400'
-                        }`}>
-                          {achievement.description}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
+                  <ChevronRight className="w-5 h-5 text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors flex-shrink-0 ml-4" />
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
-      </main>
+
+        {/* Empty state hint */}
+        {mockRecentActivity.length === 0 && (
+          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-12 text-center">
+            <Clock className="w-12 h-12 text-gray-300 dark:text-gray-700 mx-auto mb-4" />
+            <p className="text-gray-500 dark:text-gray-400">No recent activity</p>
+            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+              Start practicing to see your activity here
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

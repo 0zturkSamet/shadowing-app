@@ -343,15 +343,15 @@ async def download_audio(youtube_url: str) -> str:
     raise Exception(f"Failed to download audio from YouTube: {error_detail}")
 
 
-def _format_whisper_segments(segments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _format_whisper_segments(segments: List[Any]) -> List[Dict[str, Any]]:
     """
     Format Whisper API segments into sentence-level chunks.
 
-    Whisper API provides segment-level data. We format them into
-    consistent structure for the frontend.
+    Whisper API provides segment-level data as TranscriptionSegment objects.
+    We format them into consistent structure for the frontend.
 
     Args:
-        segments: List of segment dictionaries from Whisper API
+        segments: List of TranscriptionSegment objects from Whisper API
 
     Returns:
         List of formatted sentence dictionaries
@@ -362,11 +362,13 @@ def _format_whisper_segments(segments: List[Dict[str, Any]]) -> List[Dict[str, A
     sentences = []
 
     for idx, segment in enumerate(segments):
+        # OpenAI returns TranscriptionSegment objects, not dicts
+        # Access properties directly instead of using .get()
         sentences.append({
             "sentence_id": idx + 1,
-            "text": segment.get("text", "").strip(),
-            "start_time": round(segment.get("start", 0.0), 2),
-            "end_time": round(segment.get("end", 0.0), 2),
+            "text": getattr(segment, "text", "").strip(),
+            "start_time": round(getattr(segment, "start", 0.0), 2),
+            "end_time": round(getattr(segment, "end", 0.0), 2),
             "confidence": None  # Whisper API doesn't provide confidence scores
         })
 
