@@ -1,289 +1,377 @@
-# ShadowSpeak Backend
+# ShadowTube Backend
 
-FastAPI backend for the ShadowSpeak language learning application.
+FastAPI backend for ShadowTube - A modern language learning application that helps users master languages through video shadowing with YouTube content.
+
+## Features
+
+- **OpenAI Whisper Transcription** - AI-powered video transcription with word-level timestamps
+- **Smart Caching** - Redis-based caching with 30-day TTL to minimize API costs
+- **YouTube Integration** - Robust video download with bot detection bypass
+- **Google OAuth 2.0** - Secure authentication with Google Sign-In
+- **Practice Session Tracking** - Monitor user progress and completion
+- **PostgreSQL Database** - Scalable data storage for users, videos, and sessions
+- **RESTful API** - Well-documented endpoints with interactive Swagger UI
+
+## Tech Stack
+
+- **FastAPI** - Modern, fast web framework for building APIs
+- **PostgreSQL** - Relational database for persistent storage
+- **Redis** - In-memory cache for transcripts and session data
+- **SQLAlchemy** - Powerful ORM for database operations
+- **OpenAI Whisper API** - High-quality speech-to-text transcription
+- **yt-dlp** - YouTube video/audio downloader with bot bypass
+- **Google OAuth 2.0** - User authentication
+- **Pydantic** - Data validation and serialization
+- **JWT** - Token-based authentication
 
 ## Quick Start
 
-1. Install dependencies:
+### Prerequisites
+
+- Python 3.11+
+- Docker and Docker Compose
+- OpenAI API Key
+- Google OAuth credentials
+
+### Installation
+
+1. **Install dependencies**:
 ```bash
 pip install -r requirements.txt
 ```
 
-2. Start database and cache services:
+2. **Configure environment variables**:
+```bash
+cp .env.example .env
+# Edit .env with your configuration (see Configuration section below)
+```
+
+3. **Start database and cache services**:
 ```bash
 docker-compose up -d
 ```
 
-3. Run the application:
+4. **Run the application**:
 ```bash
 python -m uvicorn app.main:app --reload
 ```
 
-4. Access the API:
-- API: http://localhost:8000
-- Interactive Docs: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+5. **Access the API**:
+- **API**: http://localhost:8000
+- **Interactive Docs**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
 
 ## Project Structure
 
 ```
 backend/
 ├── app/
-│   ├── main.py              # FastAPI application entry point
-│   ├── models.py            # Database models (User, Video, UserProgress)
-│   ├── schemas.py           # Pydantic validation schemas
-│   ├── config.py            # Application configuration
+│   ├── main.py                  # FastAPI application entry point
+│   ├── models.py                # SQLAlchemy database models
+│   ├── schemas.py               # Pydantic validation schemas
+│   ├── config.py                # Application configuration
 │   ├── core/
-│   │   ├── database.py      # Database connection and session
-│   │   └── security.py      # Password hashing and JWT tokens
+│   │   ├── database.py          # Database connection and session
+│   │   └── security.py          # Authentication and password hashing
 │   ├── api/
-│   │   ├── auth.py          # Authentication endpoints
-│   │   ├── videos.py        # Video search and transcript endpoints
-│   │   └── health.py        # Health check endpoint
+│   │   ├── auth.py              # Google OAuth endpoints
+│   │   ├── videos.py            # Video and transcript endpoints
+│   │   └── health.py            # Health check endpoint
 │   └── services/
-│       └── cache.py         # Redis caching service
+│       ├── cache.py             # Redis caching service
+│       ├── whisper_service.py   # OpenAI Whisper integration
+│       └── youtube_service.py   # YouTube download utilities
+├── scripts/
+│   └── cache_videos.py          # Pre-cache demo videos
 ├── tests/
-│   └── test_api.py          # API endpoint tests
-├── requirements.txt         # Python dependencies
-├── docker-compose.yml       # PostgreSQL and Redis services
-└── .env.example            # Environment variables template
+│   └── test_api.py              # API endpoint tests
+├── migrations/                   # Alembic database migrations
+├── requirements.txt             # Python dependencies
+├── docker-compose.yml           # PostgreSQL and Redis services
+└── .env.example                # Environment variables template
 ```
 
 ## API Endpoints
 
-### Root
-- `GET /` - API information
-
-### Health
-- `GET /health` - Health check
+### Health Check
+- `GET /health` - Check API and service health status
 
 ### Authentication
-- `POST /api/auth/register` - Register new user (stub)
-- `POST /api/auth/login` - Login user (stub)
-- `GET /api/auth/me` - Get current user (stub)
+- `POST /api/auth/google` - Google OAuth login/register
+- `GET /api/auth/me` - Get current authenticated user
+- `POST /api/auth/logout` - Logout and invalidate session
 
 ### Videos
-- `GET /api/videos/search` - Search videos (stub)
-- `GET /api/videos/transcripts/{video_id}` - Get transcript (stub)
+- `GET /api/videos/search` - Search YouTube videos
+- `GET /api/videos/transcripts/{video_id}` - Get cached transcript
+- `POST /api/videos/transcripts/{video_id}/whisper` - Generate Whisper transcript
+- `GET /api/videos/info/{video_id}` - Get video metadata
+- `POST /api/admin/cache-warmup` - Pre-cache demo videos (admin)
+
+### Practice Sessions
+- `POST /api/sessions` - Create new practice session
+- `GET /api/sessions` - Get user's practice sessions
+- `PUT /api/sessions/{session_id}` - Update session progress
+- `GET /api/sessions/stats` - Get user statistics
+- `DELETE /api/sessions/{session_id}` - Delete practice session
 
 ## Database Models
 
 ### User
-- id, email, password_hash, name, learning_language, created_at
+```python
+class User(Base):
+    id: int                    # Primary key
+    email: str                 # Unique email
+    google_id: str            # Google OAuth ID
+    name: str                 # Display name
+    picture: str              # Profile picture URL
+    created_at: datetime      # Account creation timestamp
+```
 
 ### Video
-- id, youtube_id, title, language, transcript, cached_at
+```python
+class Video(Base):
+    id: int                    # Primary key
+    youtube_id: str           # Unique YouTube video ID
+    title: str                # Video title
+    language: str             # Language code (e.g., 'en', 'de')
+    transcript: JSON          # Transcript data with timestamps
+    cached_at: datetime       # Cache timestamp
+```
 
-### UserProgress
-- id, user_id, video_id, phrase_index, score, created_at
+### PracticeSession
+```python
+class PracticeSession(Base):
+    id: int                    # Primary key
+    user_id: int              # Foreign key to User
+    video_id: str             # YouTube video ID
+    completed_sentences: int  # Number of completed sentences
+    total_sentences: int      # Total sentences in video
+    progress_percentage: float # Completion percentage
+    started_at: datetime      # Session start time
+    completed_at: datetime    # Session completion time (nullable)
+```
 
 ## Configuration
 
-Environment variables (see `.env.example`):
-- `DATABASE_URL` - PostgreSQL connection string
-- `REDIS_URL` - Redis connection string
-- `JWT_SECRET` - JWT signing secret
-- `ALLOWED_ORIGINS` - CORS allowed origins
-- `OPENAI_API_KEY` - OpenAI API key for Whisper transcription
-- `ASSEMBLY_AI_API_KEY` - Assembly AI API key for transcription
-- `ASSEMBLY_AI_REQUEST_TIMEOUT` - Request timeout in seconds (default: 300)
-- `TRANSCRIPT_CACHE_TTL` - Cache TTL in seconds (default: 2592000 = 30 days)
-- `ASSEMBLY_AI_MAX_RETRIES` - Max retry attempts (default: 3)
-- `YOUTUBE_COOKIE_BROWSER` - (Optional) Browser to extract cookies from (chrome, firefox, edge, safari)
-- `YOUTUBE_COOKIE_FILE` - (Optional) Path to YouTube cookies.txt for bot detection bypass
+Create a `.env` file in the backend directory with the following variables:
 
-## Transcription Services
-
-ShadowSpeak supports multiple transcription services for high-quality video transcription with word-level timestamps.
-
-### OpenAI Whisper API
-
-The preferred transcription service using OpenAI's Whisper model.
-
-**Configuration**:
 ```bash
-OPENAI_API_KEY=your_openai_api_key_here
+# Database
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/shadowing
+
+# Redis Cache
+REDIS_URL=redis://localhost:6379/0
+
+# Authentication
+JWT_SECRET=your-secret-key-here
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+
+# CORS
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+
+# OpenAI Whisper
+OPENAI_API_KEY=sk-your-openai-api-key
+
+# Transcription Settings
+TRANSCRIPT_CACHE_TTL=2592000  # 30 days in seconds
+
+# YouTube Download (Optional - for bot detection bypass)
+YOUTUBE_COOKIE_BROWSER=chrome  # chrome, firefox, edge, safari
+# or
+YOUTUBE_COOKIE_FILE=/path/to/youtube_cookies.txt
 ```
 
-**Endpoint**:
-```
-POST /api/videos/transcripts/whisper
-```
+## Transcription with OpenAI Whisper
 
-**YouTube Bot Detection Bypass**:
+### How It Works
 
-YouTube may block automated downloads with "Broken Pipe" or "Sign in to confirm you're not a bot" errors. The application includes robust bypass mechanisms with multiple fallback strategies:
+1. **User requests transcript** for a YouTube video
+2. **Backend checks Redis cache** (30-day TTL)
+3. **If not cached**:
+   - Downloads audio from YouTube using yt-dlp
+   - Sends audio to OpenAI Whisper API
+   - Processes response into sentence-level segments
+   - Caches result in Redis
+4. **Returns transcript** with word-level timestamps
 
-1. **Enhanced automatic bypass** (default):
-   - Uses latest yt-dlp version with advanced bot detection countermeasures
-   - Tries multiple player clients (iOS, Android, TV, Web) with fallback
-   - Implements retry logic with exponential backoff (2s, 4s, 8s)
-   - Mimics real mobile browser behavior with proper headers
+### Endpoint
 
-2. **Cookie-based authentication** (recommended for persistent issues):
-
-   **Method 1: Browser Cookies (Easiest)**
-   ```bash
-   # Set in .env or environment
-   YOUTUBE_COOKIE_BROWSER=chrome  # or firefox, edge, safari
-   ```
-   - Automatically extracts fresh cookies from your browser
-   - No manual cookie export needed
-   - Must be signed in to YouTube in the specified browser
-
-   **Method 2: Cookie File (For servers without browser access)**
-   ```bash
-   # Export cookies using browser extension, then:
-   YOUTUBE_COOKIE_FILE=/path/to/youtube_cookies.txt
-   ```
-
-📖 **For detailed setup instructions, see [YOUTUBE_DOWNLOAD.md](../YOUTUBE_DOWNLOAD.md)**
-
-**Features**:
-- High-quality transcription with Whisper AI
-- Automatic caching (30 days)
-- Language detection and hints
-- Robust YouTube download with bot detection bypass
-
-## Assembly AI Setup
-
-ShadowSpeak also supports Assembly AI for high-quality video transcription with word-level timestamps and confidence scores.
-
-### Getting Your API Key
-
-1. **Sign up for Assembly AI**:
-   - Visit https://www.assemblyai.com/
-   - Create a free account
-   - Navigate to your dashboard
-
-2. **Get your API key**:
-   - Copy your API key from the dashboard
-   - The key looks like: `abc123def456...`
-
-3. **Add to your .env file**:
-   ```bash
-   ASSEMBLY_AI_API_KEY=your_actual_api_key_here
-   ```
-
-### Free Tier Limits
-
-The free tier includes:
-- **600 minutes/month** - Perfect for MVP testing!
-- Word-level timestamps
-- Confidence scores
-- Auto language detection
-- No credit card required
-
-### Cost Calculation for Production
-
-When you're ready to scale:
-- **Pay as you go**: $0.00025 per second ($0.015/min, $0.90/hour)
-- **Example costs**:
-  - 100 hours/month: ~$90
-  - 1,000 hours/month: ~$900
-  - 10,000 hours/month: ~$9,000
-
-### Using the Transcription Service
-
-The Assembly AI service is available at:
-```
-GET /api/videos/transcripts/{video_id}
-```
-
-**Features**:
-- ✅ High-quality transcription with confidence scores
-- ✅ Automatic caching (30 days) to minimize API costs
-- ✅ Word-level timestamps for precise shadowing
-- ✅ Automatic language detection
-- ✅ Graceful error handling with fallbacks
-- ✅ Uses yt-dlp to bypass YouTube anti-bot protections
-
-**Example request**:
 ```bash
-curl http://localhost:8000/api/videos/transcripts/dQw4w9WgXcQ
+POST /api/videos/transcripts/{video_id}/whisper
 ```
 
-**Example response**:
+**Request Body** (optional):
 ```json
 {
-  "video_id": "dQw4w9WgXcQ",
-  "title": "Never Gonna Give You Up",
-  "transcript": [
-    {
-      "sentence_id": 1,
-      "text": "We're no strangers to love.",
-      "start_time": 0.5,
-      "end_time": 2.3,
-      "confidence": 0.95
-    }
-  ],
-  "source": "assembly_ai",
-  "cached": false,
-  "processing_time": 45,
-  "language": "en"
+  "language": "en",  # Language hint for Whisper
+  "prompt": ""       # Optional context prompt
 }
 ```
 
-### Troubleshooting
+**Response**:
+```json
+{
+  "video_id": "mkrw9J064H8",
+  "title": "Das ist DW Deutsch",
+  "transcript": [
+    {
+      "sentence_id": 1,
+      "text": "Hallo und herzlich willkommen.",
+      "start_time": 0.5,
+      "end_time": 2.8,
+      "words": [
+        {"word": "Hallo", "start": 0.5, "end": 1.0},
+        {"word": "und", "start": 1.1, "end": 1.3},
+        {"word": "herzlich", "start": 1.4, "end": 2.0},
+        {"word": "willkommen", "start": 2.1, "end": 2.8}
+      ]
+    }
+  ],
+  "source": "whisper",
+  "cached": false,
+  "language": "de"
+}
+```
 
-**Error: "API key invalid"**
-- Verify your API key is correct in `.env`
-- Make sure there are no extra spaces or quotes
-- Get a new key from https://www.assemblyai.com/dashboard
+### YouTube Bot Detection Bypass
 
-**Error: "Quota exceeded"**
-- You've used all 600 free minutes this month
-- Check usage at https://www.assemblyai.com/dashboard
-- Upgrade to paid plan or wait until next month
-- Cached transcripts still work (30-day cache)
+YouTube may block automated downloads with errors like "Broken Pipe" or "Sign in to confirm you're not a bot". The backend includes multiple bypass strategies:
 
-**Error: "Video unavailable"**
-- The YouTube video may be private or deleted
-- Try a different video
-- Check if the video URL is correct
+**1. Enhanced Automatic Bypass** (default):
+- Uses latest yt-dlp with advanced countermeasures
+- Tries multiple player clients (iOS, Android, TV, Web)
+- Implements retry logic with exponential backoff
+- Mimics mobile browser behavior
 
-**Error: "Network timeout"**
-- Assembly AI service may be experiencing issues
-- The service automatically retries 3 times with exponential backoff
-- Check https://status.assemblyai.com/ for service status
+**2. Cookie-Based Authentication** (for persistent issues):
 
-**Error: "File does not appear to contain audio" or "text/html"**
-- This was an issue with YouTube's anti-bot protections
-- **Already fixed**: We now use yt-dlp to extract the audio URL first
-- If you see this error, make sure you've installed yt-dlp: `pip install yt-dlp`
+**Option A: Browser Cookies (Easiest)**
+```bash
+# In .env file
+YOUTUBE_COOKIE_BROWSER=chrome  # or firefox, edge, safari
+```
+- Automatically extracts cookies from your browser
+- Must be signed in to YouTube in that browser
+
+**Option B: Cookie File**
+```bash
+# In .env file
+YOUTUBE_COOKIE_FILE=/path/to/youtube_cookies.txt
+```
+- Export cookies using browser extension
+- Useful for servers without browser access
 
 ### Cache Strategy
 
-To minimize API costs:
-- ✅ Transcripts are cached for **30 days** in Redis
-- ✅ Cache is checked before every API call
-- ✅ Use `force_refresh=true` query param to bypass cache
-- ✅ Cache keys: `transcript:{video_id}`
+To minimize OpenAI API costs:
 
-**Clear cache for a specific video**:
-```python
-from app.services.assembly_ai import clear_transcript_cache
-clear_transcript_cache("dQw4w9WgXcQ")
+- ✅ Transcripts cached for **30 days** in Redis
+- ✅ Cache checked before every Whisper API call
+- ✅ Use `force_refresh=true` to bypass cache
+- ✅ Demo videos pre-cached on deployment
+
+**Cache Keys**:
+```
+transcript:{video_id}           # Full transcript
+transcript:{video_id}:meta      # Video metadata
+```
+
+**Pre-cache Demo Videos**:
+```bash
+python scripts/cache_videos.py
 ```
 
 ## Running Tests
 
 ```bash
+# Run all tests
 pytest tests/ -v
+
+# Run with coverage
+pytest tests/ --cov=app --cov-report=html
+
+# Run specific test file
+pytest tests/test_api.py -v
 ```
 
 ## Development
 
-The current implementation includes:
-- ✅ Project structure
-- ✅ Database models and schemas
-- ✅ Authentication utilities (password hashing, JWT)
-- ✅ Redis caching service
-- ✅ CORS and error handling
-- ✅ Docker compose setup
+### Implemented Features
 
-TODO:
-- [ ] Implement authentication endpoints
-- [ ] Add YouTube API integration
-- [ ] Implement transcript fetching
-- [ ] Add spaced repetition algorithm
+- ✅ FastAPI application with CORS and error handling
+- ✅ PostgreSQL database with SQLAlchemy ORM
+- ✅ Redis caching service
+- ✅ Google OAuth 2.0 authentication
+- ✅ OpenAI Whisper transcription
+- ✅ YouTube video download with bot bypass
+- ✅ Practice session tracking
+- ✅ User statistics and progress
+- ✅ Admin cache warmup endpoint
+- ✅ Docker Compose setup
+
+### Database Migrations
+
+```bash
+# Create new migration
+alembic revision --autogenerate -m "description"
+
+# Apply migrations
+alembic upgrade head
+
+# Rollback migration
+alembic downgrade -1
+```
+
+## Deployment
+
+### Environment Setup
+
+1. **Set production environment variables**
+2. **Run database migrations**: `alembic upgrade head`
+3. **Pre-cache demo videos**: `python scripts/cache_videos.py`
+4. **Start services**: `docker-compose up -d`
+5. **Run application**: `uvicorn app.main:app --host 0.0.0.0 --port 8000`
+
+### Production Considerations
+
+- Use **Gunicorn** with Uvicorn workers for production
+- Set up **SSL/TLS** certificates
+- Configure **PostgreSQL** with proper backups
+- Monitor **Redis** memory usage
+- Set up **logging** and error tracking
+- Implement **rate limiting** for API endpoints
+- Use **environment secrets** for API keys
+
+## Troubleshooting
+
+### Common Issues
+
+**Error: "Database connection failed"**
+- Ensure PostgreSQL is running: `docker-compose ps`
+- Check DATABASE_URL in .env
+- Verify database exists and credentials are correct
+
+**Error: "Redis connection failed"**
+- Ensure Redis is running: `docker-compose ps`
+- Check REDIS_URL in .env
+
+**Error: "OpenAI API key invalid"**
+- Verify OPENAI_API_KEY in .env
+- Ensure no extra spaces or quotes
+- Check key at https://platform.openai.com/api-keys
+
+**Error: "YouTube download failed"**
+- Update yt-dlp: `pip install --upgrade yt-dlp`
+- Try cookie-based authentication (see YouTube Bot Detection section)
+- Check video is not private or deleted
+
+**Error: "Google OAuth failed"**
+- Verify GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET
+- Check redirect URI matches Google Console configuration
+- Ensure http://localhost:3000 is in authorized origins
+
+## License
+
+This project is part of the ShadowTube language learning platform.
