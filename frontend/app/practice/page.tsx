@@ -406,42 +406,17 @@ export default function PracticePage() {
             </div>
           </div>
 
-          {/* Right Column: Transcript - Wireframe Style */}
-          <div className="bg-white rounded-2xl shadow-lg p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-gray-800">Transcript</h3>
-              <div className="flex items-center gap-2 text-xs text-gray-600">
-                <span>{state.currentSentenceIndex + 1} / {transcript.transcript.length}</span>
-              </div>
-            </div>
-            <div
-              ref={transcriptRef}
-              className="space-y-3 overflow-y-auto max-h-[600px] pr-2"
-              style={{ scrollBehavior: "smooth" }}
-            >
-              {transcript.transcript.map((sentence, index) => {
-                const isCurrentSentence = index === state.currentSentenceIndex;
-
-                return (
-                  <div
-                    key={sentence.sentence_id}
-                    data-line={index}
-                    onClick={() => jumpToTime(sentence.start_time)}
-                    className={`p-4 rounded-lg cursor-pointer transition-all ${
-                      isCurrentSentence
-                        ? "bg-youtube-red text-white"
-                        : "bg-gray-50 text-gray-800 hover:bg-gray-100"
-                    }`}
-                  >
-                    <p className={`text-sm leading-relaxed ${
-                      isCurrentSentence ? "text-white font-semibold" : "text-black"
-                    }`}>
-                      {sentence.text}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
+          {/* Right Column: Transcript with Tick Icons */}
+          <div className="bg-white rounded-2xl shadow-lg p-6 h-full max-h-[800px] flex flex-col">
+            <TranscriptPanel
+              sentences={transcript.transcript}
+              currentSentenceIndex={state.currentSentenceIndex}
+              completedSentences={state.completedSentences}
+              onSentenceClick={(index) => jumpToTime(transcript.transcript[index].start_time)}
+              onMarkComplete={markSentenceComplete}
+              source={source as "youtube" | "web_speech" | "cache" | "none"}
+              autoScroll={autoScroll}
+            />
           </div>
         </div>
       </div>
