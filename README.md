@@ -25,15 +25,15 @@ A modern web application for practicing language shadowing with YouTube videos. 
 - 🌐 **Multi-language Support** - Support for 100+ languages
 - 📱 **Responsive Design** - Works on desktop, tablet, and mobile
 
-## 🎓 Example Videos
+## 🎓 Example Videos to Try
 
-Try these curated videos to get started:
+Try these demo videos with pre-cached transcripts (instant loading!):
 
-1. **English Conversation Practice** - `ZaUEf2C4fKQ`
-2. **Daily English Conversation** - `G8s3jukUZV0`
-3. **Learn English Pronunciation** - `dNLfdHqb2xY`
+1. **Das ist DW Deutsch** - `mkrw9J064H8` - [Try it](http://localhost:3000/practice?v=mkrw9J064H8)
+2. **Dua Lipa - Levitating Featuring DaBaby** - `TUVcZfQe-Kw` - [Try it](http://localhost:3000/practice?v=TUVcZfQe-Kw)
+3. **Google kündigt Milliarden-Investitionen in Deutschland an** - `ZaUEf2C4fKQ` - [Try it](http://localhost:3000/practice?v=ZaUEf2C4fKQ)
 
-*All example videos have high-quality captions and work perfectly!*
+*Demo videos are pre-cached with Whisper transcripts for instant loading!*
 
 ## Project Structure
 

@@ -14,16 +14,36 @@ const mockStats = {
   currentStreak: 7,
 };
 
-// Example video (working with cached Whisper transcript)
+// Example videos to try (demo videos with cached transcripts)
 const exampleVideos = [
   {
     id: 'example-1',
-    title: '800+ hours of Learning Claude Code in 8 minutes',
-    videoId: 'ZaUEf2C4fKQ',
-    thumbnail: 'https://img.youtube.com/vi/ZaUEf2C4fKQ/mqdefault.jpg',
-    duration: '8 min',
+    title: 'Das ist DW Deutsch',
+    videoId: 'mkrw9J064H8',
+    thumbnail: 'https://img.youtube.com/vi/mkrw9J064H8/mqdefault.jpg',
+    duration: '3 min',
+    lastPracticed: 'Try this demo video',
+    language: 'German',
+    isExample: true,
+  },
+  {
+    id: 'example-2',
+    title: 'Dua Lipa - Levitating Featuring DaBaby (Official Music Video)',
+    videoId: 'TUVcZfQe-Kw',
+    thumbnail: 'https://img.youtube.com/vi/TUVcZfQe-Kw/mqdefault.jpg',
+    duration: '3 min',
     lastPracticed: 'Try this demo video',
     language: 'English',
+    isExample: true,
+  },
+  {
+    id: 'example-3',
+    title: 'Google kündigt Milliarden-Investitionen in Deutschland an',
+    videoId: 'ZaUEf2C4fKQ',
+    thumbnail: 'https://img.youtube.com/vi/ZaUEf2C4fKQ/mqdefault.jpg',
+    duration: '2 min',
+    lastPracticed: 'Try this demo video',
+    language: 'German',
     isExample: true,
   },
 ];
