@@ -2,6 +2,41 @@ import { useState, useEffect, useCallback, RefObject } from "react";
 import { TranscriptSentence, PracticeState } from "@/lib/types/transcript";
 
 /**
+ * Load completed sentences from localStorage
+ */
+function loadCompletedSentences(videoId: string): Set<number> {
+  if (typeof window === 'undefined') return new Set();
+
+  try {
+    const key = `shadowing_completed_${videoId}`;
+    const stored = localStorage.getItem(key);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return new Set(Array.isArray(parsed) ? parsed : []);
+    }
+  } catch (error) {
+    console.error('[useYouTubeSync] Error loading completed sentences:', error);
+  }
+
+  return new Set();
+}
+
+/**
+ * Save completed sentences to localStorage
+ */
+function saveCompletedSentences(videoId: string, completed: Set<number>): void {
+  if (typeof window === 'undefined') return;
+
+  try {
+    const key = `shadowing_completed_${videoId}`;
+    const array = Array.from(completed);
+    localStorage.setItem(key, JSON.stringify(array));
+  } catch (error) {
+    console.error('[useYouTubeSync] Error saving completed sentences:', error);
+  }
+}
+
+/**
  * Find current sentence index based on video time
  */
 function getCurrentSentenceIndex(
@@ -34,17 +69,19 @@ interface UseYouTubeSyncReturn {
 export function useYouTubeSync(
   sentences: TranscriptSentence[],
   playerRef: RefObject<any>,
-  playerReady: boolean = false
+  playerReady: boolean = false,
+  videoId?: string
 ): UseYouTubeSyncReturn {
-  const [state, setState] = useState<PracticeState>({
+  // Load completed sentences from localStorage on mount
+  const [state, setState] = useState<PracticeState>(() => ({
     currentSentenceIndex: 0,
     isPlaying: false,
     isLooping: false,
     loopCount: 0,
-    completedSentences: new Set(),
+    completedSentences: videoId ? loadCompletedSentences(videoId) : new Set(),
     currentTime: 0,
     duration: 0,
-  });
+  }));
 
   // Poll YouTube player for time updates
   useEffect(() => {
@@ -178,12 +215,18 @@ export function useYouTubeSync(
       } else {
         newCompleted.add(sentenceId);
       }
+
+      // Persist to localStorage
+      if (videoId) {
+        saveCompletedSentences(videoId, newCompleted);
+      }
+
       return {
         ...prev,
         completedSentences: newCompleted,
       };
     });
-  }, []);
+  }, [videoId]);
 
   return {
     state,

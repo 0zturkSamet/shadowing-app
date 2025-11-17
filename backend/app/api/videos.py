@@ -936,3 +936,97 @@ async def get_user_stats(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch user stats: {str(e)}"
         )
+
+
+@router.post("/admin/cache-warmup")
+async def cache_warmup_videos(
+    video_ids: list[str] = Query(
+        default=["mkrw9J064H8", "TUVcZfQe-Kw"],
+        description="List of video IDs to pre-cache"
+    )
+) -> Dict[str, Any]:
+    """
+    Pre-cache demo videos for production deployment.
+
+    This endpoint triggers Whisper transcription for a list of videos
+    and caches them in Redis. Useful for warming up cache before deployment.
+
+    Args:
+        video_ids: List of YouTube video IDs to cache (default: demo videos)
+
+    Returns:
+        dict: Cache warmup results with success/failure counts
+
+    Raises:
+        HTTPException: If cache warmup fails (500)
+
+    Example:
+        POST /api/videos/admin/cache-warmup?video_ids=mkrw9J064H8&video_ids=TUVcZfQe-Kw
+    """
+    logger.info(f"🔥 Cache warmup requested for {len(video_ids)} videos")
+
+    results = {
+        "total": len(video_ids),
+        "successful": 0,
+        "failed": 0,
+        "videos": []
+    }
+
+    for video_id in video_ids:
+        try:
+            logger.info(f"Caching video: {video_id}")
+
+            # Check if already cached
+            cached = await whisper_service.get_cached_transcript(video_id)
+            if cached:
+                logger.info(f"✅ {video_id} already cached, skipping")
+                results["successful"] += 1
+                results["videos"].append({
+                    "video_id": video_id,
+                    "status": "already_cached",
+                    "message": "Video already in cache"
+                })
+                continue
+
+            # Transcribe with Whisper
+            youtube_url = f"https://www.youtube.com/watch?v={video_id}"
+            transcript_result = await whisper_service.transcribe_youtube_video(
+                youtube_url=youtube_url,
+                use_cache=True,
+                language="en"
+            )
+
+            if transcript_result.get("status") == "success":
+                logger.info(f"✅ Successfully cached {video_id}")
+                results["successful"] += 1
+                results["videos"].append({
+                    "video_id": video_id,
+                    "status": "success",
+                    "message": "Transcript cached successfully",
+                    "sentence_count": len(transcript_result.get("transcript", [])),
+                    "language": transcript_result.get("language", "unknown")
+                })
+            else:
+                logger.error(f"❌ Failed to cache {video_id}: {transcript_result.get('message')}")
+                results["failed"] += 1
+                results["videos"].append({
+                    "video_id": video_id,
+                    "status": "failed",
+                    "message": transcript_result.get("message", "Unknown error")
+                })
+
+        except Exception as e:
+            logger.error(f"❌ Error caching {video_id}: {e}")
+            results["failed"] += 1
+            results["videos"].append({
+                "video_id": video_id,
+                "status": "error",
+                "message": str(e)
+            })
+
+    logger.info(
+        f"🎉 Cache warmup complete: {results['successful']}/{results['total']} successful, "
+        f"{results['failed']} failed"
+    )
+
+    return results

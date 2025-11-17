@@ -36,7 +36,7 @@ export default function PracticePage() {
     previousSentence,
     toggleLoopSentence,
     markSentenceComplete,
-  } = useYouTubeSync(transcript?.transcript || [], videoRef, playerReady);
+  } = useYouTubeSync(transcript?.transcript || [], videoRef, playerReady, videoId);
 
   // Toggle play/pause (YouTube IFrame API methods)
   const togglePlayPause = () => {

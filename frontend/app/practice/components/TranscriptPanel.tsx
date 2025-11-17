@@ -135,7 +135,7 @@ export function TranscriptPanel({
                 </div>
               )}
 
-              {/* Complete Checkbox */}
+              {/* Complete Checkbox - Always visible when completed */}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -145,12 +145,12 @@ export function TranscriptPanel({
                   absolute top-3 right-3 p-1 rounded-shadowtube
                   ${
                     isCompleted
-                      ? "bg-green-600 text-white"
-                      : "bg-gray-200 text-gray-600 group-hover:bg-gray-300"
+                      ? "bg-green-600 text-white opacity-100"
+                      : "bg-gray-200 text-gray-600 group-hover:bg-gray-300 opacity-0 group-hover:opacity-100"
                   }
-                  transition-colors opacity-0 group-hover:opacity-100
+                  transition-all duration-200
                 `}
-                title="Mark as completed"
+                title={isCompleted ? "Mark as incomplete" : "Mark as completed"}
               >
                 <Check className="w-4 h-4" />
               </button>
