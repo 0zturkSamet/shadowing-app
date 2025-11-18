@@ -2,6 +2,27 @@
   "name": "shadowspeak-frontend",
   "version": "0.1.0",
   "private": true,
+  "description": "A modern language learning app using YouTube videos and AI-powered transcription for shadowing practice",
+  "keywords": [
+    "language-learning",
+    "shadowing",
+    "youtube",
+    "openai-whisper",
+    "nextjs",
+    "typescript",
+    "education",
+    "video-learning"
+  ],
+  "author": "0zturkSamet",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/0zturkSamet/shadowing-app.git"
+  },
+  "bugs": {
+    "url": "https://github.com/0zturkSamet/shadowing-app/issues"
+  },
+  "homepage": "https://github.com/0zturkSamet/shadowing-app#readme",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
