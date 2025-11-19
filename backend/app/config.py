@@ -30,10 +30,21 @@ class Settings:
     )
 
     # Security settings
-    JWT_SECRET: str = os.getenv(
-        "JWT_SECRET",
-        "your-secret-key-change-in-production"
-    )
+    _jwt_secret_env = os.getenv("JWT_SECRET", "")
+    if not _jwt_secret_env:
+        raise ValueError(
+            "\n\n"
+            "❌ JWT_SECRET environment variable must be set!\n"
+            "\n"
+            "JWT_SECRET is required for secure authentication.\n"
+            "Generate a strong secret key using:\n"
+            "  python -c 'import secrets; print(secrets.token_urlsafe(32))'\n"
+            "\n"
+            "Then add it to your .env file:\n"
+            "  JWT_SECRET=your_generated_secret_here\n"
+            "\n"
+        )
+    JWT_SECRET: str = _jwt_secret_env
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION_MINUTES: int = 60 * 24 * 7  # 7 days
 

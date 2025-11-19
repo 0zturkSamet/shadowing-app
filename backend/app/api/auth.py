@@ -3,7 +3,7 @@ Authentication endpoints.
 
 This module handles user registration, login, and profile retrieval.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Cookie, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -20,9 +20,16 @@ from app.config import settings
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
+# Import limiter for rate limiting (will be initialized in main.py)
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+limiter = Limiter(key_func=get_remote_address)
+
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("5/minute")
 async def register(
+    request: Request,
     user_data: UserRegister,
     db: Session = Depends(get_db)
 ) -> UserResponse:
@@ -82,7 +89,9 @@ async def register(
 
 
 @router.post("/login", response_model=Token)
+@limiter.limit("5/minute")
 async def login(
+    request: Request,
     credentials: UserLogin,
     db: Session = Depends(get_db)
 ) -> Token:
@@ -159,9 +168,10 @@ async def google_auth():
     Initiate Google OAuth flow.
 
     Redirects the user to Google's OAuth consent screen.
+    Stores the OAuth state parameter in a secure cookie for CSRF protection.
 
     Returns:
-        RedirectResponse: Redirect to Google OAuth consent screen
+        RedirectResponse: Redirect to Google OAuth consent screen with state cookie
 
     Raises:
         HTTPException: If Google OAuth is not configured (500)
@@ -190,37 +200,59 @@ async def google_auth():
         redirect_uri=settings.GOOGLE_REDIRECT_URI
     )
 
-    # Generate authorization URL
+    # Generate authorization URL with state parameter
     authorization_url, state = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
         prompt="consent"
     )
 
-    return RedirectResponse(url=authorization_url)
+    # Store state in secure cookie to validate in callback (CSRF protection)
+    response = RedirectResponse(url=authorization_url)
+    response.set_cookie(
+        key="oauth_state",
+        value=state,
+        httponly=True,
+        secure=True,  # Only send over HTTPS
+        samesite="lax",
+        max_age=600  # 10 minutes expiration
+    )
+
+    return response
 
 
 @router.get("/google/callback")
 async def google_callback(
     code: str,
-    db: Session = Depends(get_db)
+    state: str,
+    db: Session = Depends(get_db),
+    oauth_state: str = Cookie(None)
 ):
     """
     Handle Google OAuth callback.
 
     Receives authorization code from Google, exchanges it for tokens,
-    and creates or logs in the user.
+    and creates or logs in the user. Validates the state parameter to prevent CSRF attacks.
 
     Args:
         code: Authorization code from Google
+        state: State parameter from Google (must match stored cookie)
         db: Database session
+        oauth_state: Stored state from cookie for CSRF validation
 
     Returns:
         Token: JWT access token with redirect URL
 
     Raises:
-        HTTPException: If OAuth flow fails (400)
+        HTTPException: If OAuth flow fails or state validation fails (400)
     """
+    # Validate state parameter to prevent CSRF attacks
+    if not oauth_state or state != oauth_state:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid state parameter - possible CSRF attack"
+        )
+
     try:
         # Create OAuth flow
         flow = Flow.from_client_config(
@@ -286,7 +318,11 @@ async def google_callback(
         frontend_url = settings.ALLOWED_ORIGINS[0] if settings.ALLOWED_ORIGINS else "http://localhost:3000"
         redirect_url = f"{frontend_url}/auth/callback?token={access_token}"
 
-        return RedirectResponse(url=redirect_url)
+        # Clear the OAuth state cookie after successful validation
+        response = RedirectResponse(url=redirect_url)
+        response.delete_cookie(key="oauth_state")
+
+        return response
 
     except Exception as e:
         raise HTTPException(

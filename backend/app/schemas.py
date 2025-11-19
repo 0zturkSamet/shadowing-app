@@ -5,7 +5,8 @@ This module defines all the data schemas used for API requests and responses.
 """
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
+import re
 
 
 # User Schemas
@@ -13,15 +14,31 @@ class UserRegister(BaseModel):
     """Schema for user registration request."""
 
     email: EmailStr = Field(..., description="User's email address")
-    password: str = Field(..., min_length=8, description="User's password (min 8 characters)")
+    password: str = Field(..., min_length=12, description="User's password (min 12 characters, must include uppercase, lowercase, digit, and special character)")
     name: str = Field(..., min_length=1, description="User's display name")
     learning_language: str = Field(..., description="Language the user is learning")
+
+    @field_validator('password')
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        """Validate password complexity requirements."""
+        if len(v) < 12:
+            raise ValueError('Password must be at least 12 characters long')
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('Password must contain at least one uppercase letter')
+        if not re.search(r'[a-z]', v):
+            raise ValueError('Password must contain at least one lowercase letter')
+        if not re.search(r'\d', v):
+            raise ValueError('Password must contain at least one digit')
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
+            raise ValueError('Password must contain at least one special character (!@#$%^&*(),.?":{}|<>)')
+        return v
 
     model_config = {
         "json_schema_extra": {
             "example": {
                 "email": "user@example.com",
-                "password": "securepassword123",
+                "password": "SecurePass123!",
                 "name": "John Doe",
                 "learning_language": "Spanish"
             }
