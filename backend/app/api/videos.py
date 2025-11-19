@@ -943,27 +943,32 @@ async def cache_warmup_videos(
     video_ids: list[str] = Query(
         default=["mkrw9J064H8", "TUVcZfQe-Kw"],
         description="List of video IDs to pre-cache"
-    )
+    ),
+    current_user = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
     Pre-cache demo videos for production deployment.
+
+    **Authentication Required**: This endpoint requires a valid JWT token.
 
     This endpoint triggers Whisper transcription for a list of videos
     and caches them in Redis. Useful for warming up cache before deployment.
 
     Args:
         video_ids: List of YouTube video IDs to cache (default: demo videos)
+        current_user: Authenticated user (automatically injected)
 
     Returns:
         dict: Cache warmup results with success/failure counts
 
     Raises:
-        HTTPException: If cache warmup fails (500)
+        HTTPException: If authentication fails (401) or cache warmup fails (500)
 
     Example:
         POST /api/videos/admin/cache-warmup?video_ids=mkrw9J064H8&video_ids=TUVcZfQe-Kw
+        Authorization: Bearer <jwt_token>
     """
-    logger.info(f"🔥 Cache warmup requested for {len(video_ids)} videos")
+    logger.info(f"🔥 Cache warmup requested by user {current_user.email} for {len(video_ids)} videos")
 
     results = {
         "total": len(video_ids),
